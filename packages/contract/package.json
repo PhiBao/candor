@@ -1,0 +1,31 @@
+{
+  "name": "@candor/contract",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./managed/candor/contract": {
+      "types": "./dist/managed/candor/contract/index.d.ts",
+      "import": "./dist/managed/candor/contract/index.js"
+    }
+  },
+  "scripts": {
+    "compile": "compact compile src/candor.compact src/managed/candor --skip-zk || compact compile src/candor.compact src/managed/candor",
+    "compile:zk": "compact compile src/candor.compact src/managed/candor",
+    "build": "tsc -p tsconfig.build.json && cp -R src/managed dist/managed",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "^0.16.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

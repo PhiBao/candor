@@ -1,0 +1,65 @@
+pragma language_version 0.23;
+import CompactStandardLibrary;
+
+// Wave 1 Candor contract — verified, unlinkable, aggregate-only.
+// Trust note: Wave 1 membership is Set<Bytes<32>> with disclosed leaf.
+// The specific member index is visible on-chain (but not the salary).
+// Wave 2 replaces this with HistoricMerkleTree + merkleTreePathRoot for fully private membership.
+// Nullifier is one per epoch globally, blocking double-submit (and employer stuffing).
+
+export ledger members: Set<Bytes<32>>;
+export ledger nullifiers: Set<Bytes<32>>;
+export ledger histogram: Map<Bytes<32>, Uint<64>>;
+export ledger epoch: Counter;
+export ledger issuer: Bytes<32>;
+
+constructor(issuerCommit: Bytes<32>) {
+  issuer = disclose(issuerCommit);
+  epoch.increment(1);
+}
+
+witness secret(): Bytes<32>;
+
+// Submit one bucketed salary for a cut.
+// cutKey: hash of "family:level:region" (e.g. "engineering:L5:remote-us") as Bytes<32>
+// bucket: 0..9 (see shared/src/index.ts BUCKETS)
+export circuit submit(cutKey: Bytes<32>, bucket: Uint<8>): [] {
+  assert(bucket < 10, "bucket out of range");
+
+  const mySecret = secret();
+  // Leaf committed at enrollment: persistentHash([domain, secret])
+  const leaf = persistentHash<Vector<2, Bytes<32>>>([pad(32, "candor:member:v1"), mySecret]);
+  const disclosedLeaf = disclose(leaf);
+  assert(members.member(disclosedLeaf), "not a member");
+
+  // Epoch nullifier — deterministic from secret, unlinkable without secret
+  const nf = disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "candor:nf:v1"), mySecret]));
+  assert(!nullifiers.member(nf), "already submitted this epoch");
+  nullifiers.insert(nf);
+
+  // Histogram bucket key: hash(cutKey, bucket) — disclosed bucket is the intended public output
+  const bKey = disclose(persistentHash<[Bytes<32>, Uint<8>]>([cutKey, bucket]));
+  if (!histogram.member(bKey)) {
+    histogram.insert(bKey, 1 as Uint<64>);
+  } else {
+    const cur = histogram.lookup(bKey);
+    histogram.insert(bKey, cur + 1 as Uint<64>);
+  }
+}
+
+// Issuer enrolls a member leaf. Wave 1: no on-chain access control beyond off-chain issuer auth;
+// leaf log is append-only and rate-limited off-chain. Wave 2 adds on-chain issuer key check.
+export circuit enroll(memberLeaf: Bytes<32>): [] {
+  members.insert(disclose(memberLeaf));
+}
+
+// Read-only view for indexer / public pages.
+// Returns 0 if cut/bucket has no submissions yet.
+export circuit getHistogram(cutKey: Bytes<32>, bucket: Uint<8>): Uint<64> {
+  const bKey = disclose(persistentHash<[Bytes<32>, Uint<8>]>([cutKey, bucket]));
+  if (!histogram.member(bKey)) {
+    return 0 as Uint<64>;
+  } else {
+    return histogram.lookup(bKey);
+  }
+}
