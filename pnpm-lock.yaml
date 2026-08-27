@@ -53,6 +53,9 @@ importers:
       '@midnight-ntwrk/midnight-js-types':
         specifier: 4.1.1
         version: 4.1.1
+      buffer:
+        specifier: ^6.0.3
+        version: 6.0.3
       react:
         specifier: ^18.3.1
         version: 18.3.1

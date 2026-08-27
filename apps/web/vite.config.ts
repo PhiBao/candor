@@ -41,6 +41,10 @@ export default defineConfig({
       },
     },
   },
+  define: {
+    // Node polyfills used by Midnight deps reference `global`
+    global: "globalThis",
+  },
   build: {
     // Midnight runtime wasm uses top-level await — requires a modern target
     target: "es2022",
