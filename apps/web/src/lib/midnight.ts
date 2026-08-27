@@ -202,6 +202,7 @@ export async function connectCandor(networkId = "preprod"): Promise<CandorProvid
   // Absolute origin required — the provider constructs new URL(base) internally
   const zkConfigProvider: FetchZkConfigProvider<string> = new FetchZkConfigProvider(
     `${window.location.origin}/zk/candor`,
+    fetch.bind(window),
   );
   const privateStateProvider = inMemoryPrivateStateProvider<string, CandorPrivateState>();
   const proofProvider = httpClientProofProvider(uris.proverServerUri, zkConfigProvider as any);

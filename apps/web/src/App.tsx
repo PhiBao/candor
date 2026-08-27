@@ -632,7 +632,10 @@ function OperatorPanel({
       const addr = (deployed.deployTxData as any).public?.contractAddress;
       if (addr) { onAddress(addr); onToast(`Deployed at ${addr}`); }
       else onToast("Deployed — check Lace for the address");
-    } catch (e: any) { onToast(e?.message ?? "deploy failed"); } finally { setBusy(false); }
+    } catch (e: any) {
+      console.error("[candor] deploy failed — full error:", e, "cause:", e?.cause);
+      onToast(e?.message ?? "deploy failed");
+    } finally { setBusy(false); }
   };
 
   const doEnroll = async () => {
@@ -646,7 +649,10 @@ function OperatorPanel({
         issuerKey: hexToBytes(clean),
       });
       onToast("Member enrolled on-chain");
-    } catch (e: any) { onToast(e?.message ?? "enroll failed"); } finally { setBusy(false); }
+    } catch (e: any) {
+      console.error("[candor] enroll failed — full error:", e, "cause:", e?.cause);
+      onToast(e?.message ?? "enroll failed");
+    } finally { setBusy(false); }
   };
 
   const doEnrollMine = async () => {
