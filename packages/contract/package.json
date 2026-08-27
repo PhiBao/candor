@@ -21,7 +21,7 @@
   "scripts": {
     "compile": "compact compile src/candor.compact src/managed/candor --skip-zk || compact compile src/candor.compact src/managed/candor",
     "compile:zk": "compact compile src/candor.compact src/managed/candor",
-    "build": "tsc -p tsconfig.build.json && cp -R src/managed dist/managed",
+    "build": "tsc -p tsconfig.build.json && rm -rf dist/managed && cp -R src/managed dist/managed",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
