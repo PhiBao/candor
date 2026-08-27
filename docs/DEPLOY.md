@@ -27,11 +27,20 @@ docker compose -f packages/contract/proof-server.yml up
 # listens on http://localhost:6300
 ```
 
-## 3. Fund the deployer wallet
+## 3. Fund the deployer wallet (tNIGHT → tDUST)
+
+On Preprod the faucet does NOT dispense tDUST — you generate it from tNIGHT:
 
 1. Create/recover a Midnight account in Lace (Preprod network).
-2. Get tDUST from the [Preprod faucet](https://midnight-tmnight-preprod.nethermind.dev/).
-3. Wait for wallet registration to complete (can take a few minutes).
+2. Copy your **unshielded** address (`mn_addr_preprod1...`) and request tNIGHT from the
+   [Preprod faucet](https://midnight-tmnight-preprod.nethermind.dev/) — 1000 tNIGHT per request.
+3. In Lace, open the Midnight wallet and click **Generate tDUST** → Review → Confirm.
+   This registers your tNIGHT for DUST generation (an on-chain transaction).
+4. Wait 1–2 minutes: tDUST accrues continuously into the tDUST tank, up to a cap
+   set by your registered tNIGHT. Deploy once you see a tDUST balance.
+
+See [Funding a wallet](https://docs.midnight.network/guides/acquire-tokens) for the
+full guide and troubleshooting.
 
 ## 4. Configure
 
@@ -77,7 +86,7 @@ pnpm dev                           # :5173, proxies /issuer
 | Symptom | Fix |
 |---|---|
 | Proof server connection refused | `docker compose -f packages/contract/proof-server.yml up` not running, or wrong `PROOF_SERVER` |
-| `insufficient funds` | faucet tDUST missing, or wallet not registered yet |
+| `Insufficient Funds: could not balance dust` | tNIGHT not registered for DUST generation yet — run **Generate tDUST** in Lace and wait for the tank to fill |
 | `wrong network` | Lace is on a different network than `MIDNIGHT_NETWORK` |
 | `enroll: caller is not the issuer` | `CANDOR_ISSUER_KEY` in the issuer service ≠ key committed at deployment |
 | `already submitted this epoch` | expected — one submission per member per epoch; issuer must call `nextEpoch` |
