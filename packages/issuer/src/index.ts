@@ -10,7 +10,6 @@
  */
 import express from "express";
 import cors from "cors";
-import crypto from "node:crypto";
 
 const app = express();
 app.use(cors());
@@ -23,18 +22,6 @@ const pendingCodes = new Map<string, string>(); // email -> code
 const verifiedEmails = new Set<string>();
 const leafLog: { email: string; leafHex: string; at: string }[] = [];
 const leaves = new Set<string>(); // hex
-
-function sha256Hex(buf: Uint8Array): string {
-  return crypto.createHash("sha256").update(buf).digest("hex");
-}
-
-function leafForSecretHex(secretHex: string): string {
-  const secret = Buffer.from(secretHex.replace(/^0x/, ""), "hex");
-  const pad = Buffer.alloc(32, 0);
-  Buffer.from("candor:member:v1").copy(pad);
-  const h = crypto.createHash("sha256").update(Buffer.concat([pad, secret])).digest("hex");
-  return "0x" + h;
-}
 
 app.get("/health", (_req, res) => res.json({ ok: true, leaves: leaves.size, verified: verifiedEmails.size }));
 
@@ -96,14 +83,13 @@ app.get("/leaves", (_req, res) => {
   res.json({ count: leaves.size, leaves: Array.from(leaves) });
 });
 
-// Helper: compute leaf from secret (useful for testing, not used in prod flow where client computes)
-app.post("/leaf", (req, res) => {
-  const secretHex = String(req.body?.secretHex ?? "").trim();
-  if (!/^0x[0-9a-f]{64}$/.test(secretHex) && !/^[0-9a-f]{64}$/.test(secretHex)) {
-    return res.status(400).json({ error: "secretHex must be 32 bytes hex" });
-  }
-  const leafHex = leafForSecretHex(secretHex);
-  res.json({ leafHex });
+// Operator helper: leaf recorded for a verified email (operator enrolls it on-chain).
+// The issuer stores leaves, never secrets — the leaf is derived on the contributor's device.
+app.get("/leaf", (req, res) => {
+  const email = String(req.query?.email ?? "").trim().toLowerCase();
+  const entry = leafLog.find((e) => e.email === email);
+  if (!entry) return res.status(404).json({ error: "no leaf for that email" });
+  res.json({ leafHex: entry.leafHex, at: entry.at });
 });
 
 app.listen(PORT, () => {

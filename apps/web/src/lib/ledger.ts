@@ -9,6 +9,7 @@ import {
   emptyHistogram,
 } from "@candor/shared";
 import { bytesToHex } from "@candor/shared";
+import { memberLeaf } from "@candor/shared/hash";
 
 export type LedgerSnapshot = {
   members: string[]; // hex leaf 0x...
@@ -41,13 +42,9 @@ export function getSecretHex(): string | null {
   return localStorage.getItem(LS_SECRET);
 }
 
-export async function leafForSecret(secret: Uint8Array): Promise<string> {
-  const pad = new TextEncoder().encode("candor:member:v1".padEnd(32, "\0"));
-  const buf = new Uint8Array(pad.length + secret.length);
-  buf.set(pad, 0);
-  buf.set(secret, pad.length);
-  const h = await crypto.subtle.digest("SHA-256", buf);
-  return "0x" + bytesToHex(new Uint8Array(h));
+// Canonical leaf — identical to the circuit's derivation (hash-parity tested).
+export function leafForSecret(secret: Uint8Array): string {
+  return "0x" + bytesToHex(memberLeaf(secret));
 }
 
 export async function nullifierForSecret(secret: Uint8Array): Promise<string> {

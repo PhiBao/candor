@@ -8,6 +8,7 @@ import {
   bucketForSalary,
   cutLabel,
   cutKeyString,
+  hexToBytes,
 } from "@candor/shared";
 import {
   loadLedger,
@@ -23,6 +24,18 @@ import {
   loadMyContribs,
 } from "./lib/ledger";
 import { requestCode, confirmCode, enrollLeaf } from "./lib/issuer";
+import {
+  isLaceAvailable,
+  connectCandor,
+  deployCandor,
+  enrollOnChain,
+  nextEpochOnChain,
+  submitOnChain,
+  getStoredContractAddress,
+  setStoredContractAddress,
+  type CandorProviders,
+} from "./lib/midnight";
+import { memberLeaf, cutKeyBytes, bytesToHex } from "@candor/shared/hash";
 
 type View = "browse" | "cut" | "contribute" | "result";
 
@@ -31,6 +44,12 @@ export default function App() {
   const [view, setView] = useState<View>("browse");
   const [activeCutKey, setActiveCutKey] = useState<string>(() => allCuts()[0] ? cutKeyString(allCuts()[0]) : "");
   const [toast, setToast] = useState<string | null>(null);
+  const [chain, setChain] = useState<{ providers: CandorProviders } | null>(null);
+  useEffect(() => {
+    (window as any).__candorChain = chain;
+  }, [chain]);
+  const [operatorOpen, setOperatorOpen] = useState(false);
+  const contractAddress = getStoredContractAddress();
 
   // keep ledger in sync with storage events (demo)
   useEffect(() => {
@@ -45,6 +64,16 @@ export default function App() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2800);
+  };
+
+  const connectChain = async () => {
+    try {
+      const providers = await connectCandor("preprod");
+      setChain({ providers });
+      showToast("Lace connected — Preprod");
+    } catch (e: any) {
+      showToast(e?.message ?? "Lace connection failed");
+    }
   };
 
   return (
@@ -65,6 +94,18 @@ export default function App() {
             <button className="btn btn-ghost small" onClick={() => { resetLedger(); setLedger(loadLedger()); showToast("Demo ledger reset"); }}>
               Reset demo
             </button>
+            {isLaceAvailable() && (
+              chain ? (
+                <span className="badge" title={contractAddress ?? "no contract yet"}>
+                  <span className="mono small">chain</span> <strong>Preprod ✓</strong>
+                </span>
+              ) : (
+                <button className="btn small" onClick={connectChain}>Connect Lace</button>
+              )
+            )}
+            {chain && (
+              <button className="btn btn-ghost small" onClick={() => setOperatorOpen(true)} title="Deploy / enroll / epoch">Operator</button>
+            )}
             <button className="btn btn-primary small" onClick={() => setView("contribute")}>Contribute</button>
           </div>
         </div>
@@ -345,10 +386,22 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
       let snap = loadLedger();
       snap = enrollLocal(snap, leafHex);
       saveLedger(snap);
-      // small delay to feel like proof generation (local proof server would take ~20s on Preprod)
-      await new Promise((r) => setTimeout(r, 900));
-      const res = await submitLocal(snap, secret, selectedCut, bucket);
-      if (!res.ok) throw new Error(res.reason);
+
+      const chainProps = (window as any).__candorChain as { providers: CandorProviders } | undefined;
+      const address = getStoredContractAddress();
+      if (chainProps && address) {
+        // REAL chain path: prove via Lace, submit on Preprod. Salary never leaves this device.
+        await submitOnChain(chainProps.providers, address, {
+          cutKey: cutKeyBytes(cutKeyString(selectedCut)),
+          bucket,
+          secret,
+        });
+      } else {
+        // demo path: simulated proving, mock ledger
+        await new Promise((r) => setTimeout(r, 900));
+        const res = await submitLocal(snap, secret, selectedCut, bucket);
+        if (!res.ok) throw new Error(res.reason);
+      }
       onSuccess(selectedCut, bucket);
     } catch (e: any) { setErr(e.message ?? "submit failed"); } finally { setBusy(false); }
   };
@@ -516,6 +569,141 @@ function ResultView({ ledger, onBack, onBrowse }: { ledger: any; onBack: () => v
 
             <div className="small muted" style={{ marginTop: 10 }}>
               Your data expires after this epoch ({ledger.epoch}) — you’ll be eligible to refresh it next quarter. That’s the retention loop, and it’s cryptographic.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OperatorPanel({
+  chain,
+  onClose,
+  onToast,
+  onAddress,
+}: {
+  chain: { providers: CandorProviders } | null;
+  onClose: () => void;
+  onToast: (msg: string) => void;
+  onAddress: (addr: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [issuerKeyHex, setIssuerKeyHex] = useState<string>(() => localStorage.getItem("candor:issuerKey") ?? "");
+  const [leafHex, setLeafHex] = useState<string>("");
+  const [enrollEmail, setEnrollEmail] = useState<string>("");
+  const address = getStoredContractAddress();
+
+  const saveIssuerKey = () => {
+    const clean = issuerKeyHex.replace(/^0x/, "").trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast("issuer key must be 64 hex chars (32 bytes)"); return; }
+    localStorage.setItem("candor:issuerKey", clean);
+    onToast("Issuer key saved (local only)");
+  };
+
+  const doDeploy = async () => {
+    if (!chain) return;
+    const clean = issuerKeyHex.replace(/^0x/, "").trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast("set a valid issuer key first"); return; }
+    setBusy(true);
+    try {
+      const deployed = await deployCandor(chain.providers, hexToBytes(clean));
+      const addr = (deployed.deployTxData as any).public?.contractAddress;
+      if (addr) { onAddress(addr); onToast(`Deployed at ${addr}`); }
+      else onToast("Deployed — check Lace for the address");
+    } catch (e: any) { onToast(e?.message ?? "deploy failed"); } finally { setBusy(false); }
+  };
+
+  const doEnroll = async () => {
+    if (!chain || !address) { onToast("deploy first"); return; }
+    const clean = issuerKeyHex.replace(/^0x/, "").trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast("set a valid issuer key first"); return; }
+    setBusy(true);
+    try {
+      await enrollOnChain(chain.providers, address, {
+        memberLeaf: hexToBytes(leafHex.replace(/^0x/, "").trim()),
+        issuerKey: hexToBytes(clean),
+      });
+      onToast("Member enrolled on-chain");
+    } catch (e: any) { onToast(e?.message ?? "enroll failed"); } finally { setBusy(false); }
+  };
+
+  const doEnrollMine = async () => {
+    const secret = getOrCreateSecret();
+    setLeafHex(bytesToHex(memberLeaf(secret)));
+  };
+
+  const doEnrollByEmail = async () => {
+    // fetch the leaf the issuer computed for a verified email (issuer service keeps a map)
+    try {
+      const r = await fetch(`/issuer/leaf?email=${encodeURIComponent(enrollEmail)}`);
+      const j = await r.json();
+      if (j?.leafHex) setLeafHex(j.leafHex);
+      else onToast("no leaf for that email");
+    } catch { onToast("issuer service unreachable"); }
+  };
+
+  const doNextEpoch = async () => {
+    if (!chain || !address) { onToast("deploy first"); return; }
+    const clean = issuerKeyHex.replace(/^0x/, "").trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast("set a valid issuer key first"); return; }
+    setBusy(true);
+    try {
+      await nextEpochOnChain(chain.providers, address, { issuerKey: hexToBytes(clean) });
+      onToast("Epoch advanced — members can submit again");
+    } catch (e: any) { onToast(e?.message ?? "nextEpoch failed"); } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", backdropFilter: "blur(8px)", zIndex: 40, overflow: "auto", padding: 18 }}>
+      <div className="container" style={{ maxWidth: 640, marginTop: 18 }}>
+        <div className="card">
+          <div className="card-pad">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <button className="btn small" onClick={onClose}>✕ Close</button>
+              <span className="mono small muted">issuer console · Preprod</span>
+            </div>
+            <h2 style={{ margin: "6px 0 4px" }}>Issuer console</h2>
+            <p className="small muted">
+              The operator wallet holds the issuer key witness. It can enroll member leaves and advance the
+              epoch — nothing else. It never sees contributor secrets or salaries.
+            </p>
+
+            <label className="small muted">Issuer secret key (hex, stays in this browser)</label>
+            <div className="row" style={{ gap: 8, marginTop: 6 }}>
+              <input className="input" value={issuerKeyHex} onChange={(e) => setIssuerKeyHex(e.target.value)} placeholder="64 hex chars" />
+              <button className="btn small" onClick={saveIssuerKey}>Save</button>
+            </div>
+
+            <div className="sep" />
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div className="small muted">Contract</div>
+                <div className="mono small">{address ?? "not deployed"}</div>
+              </div>
+              <button className="btn btn-primary small" disabled={busy || !chain} onClick={doDeploy}>
+                {busy ? "Deploying…" : "Deploy contract"}
+              </button>
+            </div>
+
+            <div className="sep" />
+            <label className="small muted">Member leaf to enroll (hex)</label>
+            <div className="row" style={{ gap: 8, marginTop: 6 }}>
+              <input className="input" value={leafHex} onChange={(e) => setLeafHex(e.target.value)} placeholder="leaf hex" />
+            </div>
+            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+              <button className="btn small" onClick={doEnrollMine}>Load my leaf (this browser)</button>
+              <input className="input" style={{ maxWidth: 220 }} placeholder="user@company.com" value={enrollEmail} onChange={(e) => setEnrollEmail(e.target.value)} />
+              <button className="btn small" onClick={doEnrollByEmail}>Fetch by email</button>
+              <button className="btn btn-primary small" disabled={busy || !address || !leafHex} onClick={doEnroll}>
+                {busy ? "Enrolling…" : "Enroll on-chain"}
+              </button>
+            </div>
+
+            <div className="sep" />
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <span className="small muted">Advancing the epoch lets every member submit once more.</span>
+              <button className="btn small" disabled={busy || !address} onClick={doNextEpoch}>Advance epoch</button>
             </div>
           </div>
         </div>
