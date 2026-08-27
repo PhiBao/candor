@@ -289,6 +289,15 @@ export default function App() {
           {toast}
         </div>
       )}
+
+      {operatorOpen && (
+        <OperatorPanel
+          chain={chain}
+          onClose={() => setOperatorOpen(false)}
+          onToast={showToast}
+          onAddress={setStoredContractAddress}
+        />
+      )}
     </div>
   );
 }
