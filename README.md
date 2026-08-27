@@ -1,0 +1,101 @@
+# Candor — Verified, Unlinkable Compensation Truth
+
+> **For crypto-native tech workers who need to know what “people like me” actually earn — without exposing themselves.**
+
+Candor is a privacy-first compensation benchmarking product built on **Midnight Network (Compact)**. Only verified members can contribute, no one — including the team — can link a number back to a person, and the public output is a distribution, never a record.
+
+## Why this exists
+
+| Option | Verified? | Unlinkable? | Worker-facing? |
+|---|---|---|---|
+| Levels.fyi / Glassdoor | No (self-report) | Partly | Yes |
+| Blind | Yes (work email) | No (persistent handle) | Yes |
+| Pave / OpenComp | Yes | No | No (employer-owned) |
+| **Candor** | **Yes** | **Yes** | **Yes** |
+
+Without ZK you cannot have “verified” and “unlinkable” at once. Midnight makes it possible.
+
+- **Proof server must be user-local** — the witness is the salary, so hosted proving is permanently rejected. This is a deliberate trust boundary.
+- **Wave 1 uses a trusted issuer** that learns *who is a member* but cannot link a *submission* to a member (it never sees the secret that derives the nullifier).
+
+## Product in one sentence
+
+*Verified, unlinkable, aggregate-only comp truth — one epoch, one submission per verified person.*
+
+## Architecture
+
+```
+packages/contract   Compact source (candor.compact) + generated TS + vitest circuit suite
+packages/shared     Cuts, buckets, hashing, k-gate logic
+packages/issuer     Email verification → leaf insertion (only trusted component)
+apps/web            Next.js-style public cut pages + guided contribute wizard (Vite + React)
+```
+
+**Ledger (Wave 1)**
+
+- `members: Set<Bytes<32>>` — leaf = `persistentHash([pad(32,"candor:member:v1"), secret])`
+- `nullifiers: Set<Bytes<32>>` — `persistentHash([pad(32,"candor:nf:v1"), secret])` — one per epoch
+- `histogram: Map<Bytes<32>, Uint<64>>` — key = `persistentHash([cutKey, bucket])`
+- `epoch: Counter` — increments per quarter; submission valid for one epoch
+- `issuer: Bytes<32>`
+
+**Circuit `submit(cutKey, bucket)`**
+
+1. Derive leaf from `secret()` witness, check `members.member(disclose(leaf))`
+2. Derive epoch nullifier, check not in `nullifiers`, insert
+3. Bucket range check (`bucket < 10`), derive `bKey = persistentHash([cutKey, bucket])`, increment histogram
+4. Only `cutKey` and `bucket` are disclosed; secret and exact salary stay private
+
+**Trust boundary (stated plainly)**
+
+The issuer learns who is a member. It cannot compute nullifiers (never sees `secret`), so it cannot link a submission to a member. Wave 1 discloses the leaf to check membership — the specific member index is visible on-chain, but not the salary. Wave 2 replaces `Set` with `HistoricMerkleTree` + `merkleTreePathRoot` for fully private membership.
+
+## Quick start
+
+```bash
+# install
+pnpm install
+
+# compile contract (requires compact 0.31.1, language 0.23)
+pnpm contract:compile
+
+# build all
+pnpm build
+
+# run web app (mock ledger demo, no chain required)
+pnpm dev
+# → http://localhost:5173
+
+# run contract circuit tests (no network)
+pnpm --filter @candor/contract test
+```
+
+### Midnight deployment (Preprod)
+
+```bash
+# 1. ensure local proof server is running
+docker compose -f packages/contract/proof-server.yml up
+
+# 2. configure wallet + deploy (uses Lace on Preprod)
+pnpm --filter @candor/contract deploy:preprod
+```
+
+See `packages/contract/README.md` and `docs/DEPLOY.md`.
+
+## Project status (honest, Wave 1 in progress)
+
+| Piece | State |
+|---|---|
+| Compact contract (`candor.compact`, 0.31.1 / lang 0.23) | **Compiled** — circuits `submit`, `enroll`, `getHistogram`; proving keys in `src/managed/candor/` |
+| Off-chain circuit + invariant tests | **Passing** (happy path, double-submit, non-member, bad bucket, histogram-not-sum leak regression) |
+| Web app, mock ledger mode | **Working** — full browse → verify → contribute → percentile flow, no chain needed (`pnpm dev`) |
+| Issuer service | **Demo mode** — verification codes returned in-band, no email infra, does not call `enroll` on-chain yet |
+| On-chain path (Midnight.js, Lace, proof server, Preprod deploy) | **Not wired yet** — `deploy.ts` is a stub, browser wiring is sketched in `apps/web/src/lib/midnight.ts` |
+| Demo video / pitch deck | **Not yet** — planned before the Sep 16 deadline |
+
+- **In scope for Wave 1**: one epoch, USD only, engineering levels L3–L7, role × level × region cuts (no company), histogram buckets, epoch nullifier, k≥5 gate (UI-enforced), issuer service, web wizard, Preprod deployment.
+- **Out of scope for Wave 1**: multi-issuer / zkEmail, employer product, monetization, equity valuation, multi-currency, mobile.
+
+## License
+
+Apache-2.0
