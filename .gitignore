@@ -53,3 +53,4 @@ coverage/
 
 # tsc emit of vite config
 apps/web/vite.config.js
+packages/shared/src/hash.js
