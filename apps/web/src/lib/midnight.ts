@@ -60,7 +60,8 @@ const FALLBACK_URIS = {
   indexerWsUri: "wss://indexer.preprod.midnight.network/api/v4/graphql/ws",
   // Routed through the Vite dev proxy: Lace's service worker blocks direct
   // 127.0.0.1 fetches (ERR_FAILED), same-origin paths pass through.
-  proverServerUri: "/proof-server",
+  // Absolute because FetchZkConfigProvider/proof provider construct new URL(uri).
+  proverServerUri: `${window.location.origin}/proof-server`,
 };
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
@@ -195,7 +196,10 @@ export async function connectCandor(networkId = "preprod"): Promise<CandorProvid
   }
   console.info("[candor] using endpoints:", uris);
 
-  const zkConfigProvider: FetchZkConfigProvider<string> = new FetchZkConfigProvider("/zk/candor");
+  // Absolute origin required — the provider constructs new URL(base) internally
+  const zkConfigProvider: FetchZkConfigProvider<string> = new FetchZkConfigProvider(
+    `${window.location.origin}/zk/candor`,
+  );
   const privateStateProvider = inMemoryPrivateStateProvider<string, CandorPrivateState>();
   const proofProvider = httpClientProofProvider(uris.proverServerUri, zkConfigProvider as any);
   const publicDataProvider = indexerPublicDataProvider(uris.indexerUri, uris.indexerWsUri);
@@ -240,7 +244,10 @@ function compiledContract(): any {
   // keys/zkir are fetched from /zk/candor; witness code lives in @candor/contract
   const withWitnessesFn = CompiledContract.withWitnesses as any;
   const withAssetsFn = CompiledContract.withCompiledFileAssets as any;
-  return withAssetsFn(withWitnessesFn(CompiledContract.make("candor", CandorContract), witnesses), "/zk/candor");
+  return withAssetsFn(
+    withWitnessesFn(CompiledContract.make("candor", CandorContract), witnesses),
+    `${window.location.origin}/zk/candor`,
+  );
 }
 
 type CandorInstance = InstanceType<typeof CandorContract>;
