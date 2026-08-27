@@ -8,6 +8,7 @@
  *   (Lace runs a prover internally; the witness/salary never leaves the device)
  * - balancing + submission are wrapped around the connected wallet API
  */
+import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import { FetchZkConfigProvider } from "@midnight-ntwrk/midnight-js-fetch-zk-config-provider";
 import { httpClientProofProvider } from "@midnight-ntwrk/midnight-js-http-client-proof-provider";
 import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
@@ -173,6 +174,8 @@ export type CandorProviders = {
 
 /** Connect to the wallet and assemble the full provider bundle for Candor. */
 export async function connectCandor(networkId = "preprod"): Promise<CandorProviders> {
+  // Required by midnight-js before any wallet/contract operation
+  setNetworkId(networkId);
   const connectedAPI = await connectToWallet(networkId);
 
   console.info("[candor] fetching wallet configuration…");
