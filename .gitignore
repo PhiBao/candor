@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+.vite/
+.turbo/
+
+# Compiled emit artifacts that should never live next to sources
+apps/web/src/**/*.js
+apps/web/src/**/*.js.map
+packages/*/src/**/*.js.map
+packages/shared/src/index.js
+packages/shared/src/mockLedger.js
+packages/contract/src/index.js
+packages/contract/src/witnesses.js
+packages/contract/src/deploy.js
+packages/contract/src/candor.test.js
+packages/issuer/src/index.js
+
+# Local AI tooling configs (not part of the project)
+opencode.json
+opencode.alt.json
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs & debug
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Editor & OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo

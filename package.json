@@ -1,0 +1,22 @@
+{
+  "name": "candor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @candor/web dev",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "contract:compile": "pnpm --filter @candor/contract compile",
+    "contract:build": "pnpm --filter @candor/contract build"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20"
+  }
+}
