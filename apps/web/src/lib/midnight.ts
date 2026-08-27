@@ -31,8 +31,8 @@ export type CandorCircuitId = "submit" | "enroll" | "nextEpoch" | "getHistogram"
 export const MIDNIGHT_NETWORKS = {
   preprod: {
     networkId: "preprod",
-    indexer: "https://indexer.preprod.midnight.network/api/v5/graphql",
-    indexerWS: "wss://indexer.preprod.midnight.network/api/v5/graphql/ws",
+    indexer: "https://indexer.preprod.midnight.network/api/v4/graphql",
+    indexerWS: "wss://indexer.preprod.midnight.network/api/v4/graphql/ws",
   },
 } as const;
 

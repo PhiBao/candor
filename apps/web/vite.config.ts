@@ -5,6 +5,16 @@ import wasm from "vite-plugin-wasm";
 
 export default defineConfig({
   plugins: [react(), wasm()],
+  optimizeDeps: {
+    esbuildOptions: {
+      // Midnight's level-private-state-provider extends Node's EventEmitter;
+      // vite's dev externalization of the `events`/`assert` builtins yields
+      // undefined for class extends — substitute real polyfills at pre-bundle time.
+      alias: {
+        events: path.resolve(__dirname, "node_modules/events/events.js"),
+      },
+    },
+  },
   resolve: {
     alias: [
       {
