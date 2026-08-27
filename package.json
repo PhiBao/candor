@@ -13,10 +13,14 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "contract:compile": "pnpm --filter @candor/contract compile",
-    "contract:build": "pnpm --filter @candor/contract build"
+    "contract:build": "pnpm --filter @candor/contract build",
+    "dev:all": "concurrently -n web,issuer \"pnpm --filter @candor/web dev\" \"pnpm --filter @candor/issuer dev\""
   },
   "packageManager": "pnpm@9.12.0",
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }

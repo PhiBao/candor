@@ -31,12 +31,12 @@ export type CandorCircuitId = "submit" | "enroll" | "nextEpoch" | "getHistogram"
 /** Compatible connector API major (aligns with example-bboard: '4.x') */
 const COMPATIBLE_MAJOR = "4";
 
-// ---- wallet detection (generic, per official example) ----------------------
+// ---- wallet detection (generic, per official examples) ---------------------
 
 function getFirstCompatibleWallet(): InitialAPI | undefined {
   const midnight = (window as any).midnight as Record<string, InitialAPI> | undefined;
   if (!midnight) return undefined;
-  return Object.values(midnight).find(
+  const compatible = Object.values(midnight).filter(
     (wallet): wallet is InitialAPI =>
       !!wallet &&
       typeof wallet === "object" &&
@@ -44,23 +44,44 @@ function getFirstCompatibleWallet(): InitialAPI | undefined {
       typeof wallet.apiVersion === "string" &&
       wallet.apiVersion.split(".")[0] === COMPATIBLE_MAJOR,
   );
+  // Prefer Lace if multiple wallets inject (rdns / name heuristics)
+  return (
+    compatible.find((w: any) => w.rdns === "io.lace.wallet" || w.name === "lace") ?? compatible[0]
+  );
 }
 
 export function isLaceAvailable(): boolean {
   return getFirstCompatibleWallet() !== undefined;
 }
 
+/** Fallback endpoints when the wallet's getConfiguration() is missing or fails. */
+const FALLBACK_URIS = {
+  indexerUri: "https://indexer.preprod.midnight.network/api/v4/graphql",
+  indexerWsUri: "wss://indexer.preprod.midnight.network/api/v4/graphql/ws",
+  // Routed through the Vite dev proxy: Lace's service worker blocks direct
+  // 127.0.0.1 fetches (ERR_FAILED), same-origin paths pass through.
+  proverServerUri: "/proof-server",
+};
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+  ]);
+}
+
 /**
  * Connect to the first compatible wallet. Polls briefly — extensions inject
- * `window.midnight` after page load.
+ * `window.midnight` after page load. Tries the v4 `connect()` flow first,
+ * falls back to legacy `enable()`.
  */
 export async function connectToWallet(networkId = "preprod"): Promise<ConnectedAPI> {
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + 8_000;
   let initialAPI: InitialAPI | undefined;
   while (Date.now() < deadline) {
     initialAPI = getFirstCompatibleWallet();
     if (initialAPI) break;
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 150));
   }
   // Debug aid: shows which wallets injected and their API versions
   const midnight = (window as any).midnight as Record<string, any> | undefined;
@@ -71,7 +92,25 @@ export async function connectToWallet(networkId = "preprod"): Promise<ConnectedA
   if (!initialAPI) {
     throw new Error("Could not find a Midnight wallet connector. Extension installed and enabled?");
   }
-  const connectedAPI = await initialAPI.connect(networkId);
+  console.info("[candor] connector found, requesting connection…");
+
+  const raw = initialAPI as unknown as Record<string, unknown>;
+  let connectedAPI: ConnectedAPI;
+  if (typeof raw.connect === "function") {
+    // v4: connect() directly on the connector
+    connectedAPI = await initialAPI.connect(networkId);
+  } else if (typeof raw.enable === "function") {
+    // legacy: enable() first, then optional connect()
+    const enabled = await (raw.enable as () => Promise<any>)();
+    const enabledRaw = enabled as unknown as Record<string, unknown>;
+    connectedAPI =
+      typeof enabledRaw.connect === "function"
+        ? await (enabledRaw.connect as (id: string) => Promise<ConnectedAPI>)(networkId)
+        : (enabled as ConnectedAPI);
+  } else {
+    throw new Error("Wallet connector exposes neither connect() nor enable()");
+  }
+  console.info("[candor] wallet connected");
   return connectedAPI;
 }
 
@@ -135,23 +174,36 @@ export type CandorProviders = {
 export async function connectCandor(networkId = "preprod"): Promise<CandorProviders> {
   const connectedAPI = await connectToWallet(networkId);
 
+  console.info("[candor] fetching wallet configuration…");
+  let uris = { ...FALLBACK_URIS };
+  try {
+    const cfg = (await withTimeout(
+      (connectedAPI as any).getConfiguration(),
+      5_000,
+      "getConfiguration",
+    )) as Record<string, string>;
+    uris = {
+      indexerUri: cfg.indexerUri ?? cfg.indexerUrl ?? FALLBACK_URIS.indexerUri,
+      indexerWsUri: cfg.indexerWsUri ?? cfg.indexerWsUrl ?? FALLBACK_URIS.indexerWsUri,
+      // Always use the same-origin proxy for the prover: Lace's service worker
+      // blocks direct 127.0.0.1 fetches from the page (ERR_FAILED).
+      proverServerUri: FALLBACK_URIS.proverServerUri,
+    };
+    console.info("[candor] wallet configuration:", cfg);
+  } catch (e: any) {
+    console.info("[candor] getConfiguration unavailable, using fallback URIs:", e?.message ?? e);
+  }
+  console.info("[candor] using endpoints:", uris);
+
   const zkConfigProvider: FetchZkConfigProvider<string> = new FetchZkConfigProvider("/zk/candor");
-
-  // The wallet supplies its own proof-server and indexer endpoints
-  const config = await connectedAPI.getConfiguration();
-  if (!config.indexerUri) throw new Error("Wallet configuration missing indexerUri");
-
   const privateStateProvider = inMemoryPrivateStateProvider<string, CandorPrivateState>();
+  const proofProvider = httpClientProofProvider(uris.proverServerUri, zkConfigProvider as any);
+  const publicDataProvider = indexerPublicDataProvider(uris.indexerUri, uris.indexerWsUri);
 
-  const proofProvider = httpClientProofProvider(
-    config.proverServerUri ?? "http://localhost:6300",
-    zkConfigProvider as any,
-  );
-
-  const publicDataProvider = indexerPublicDataProvider(config.indexerUri, config.indexerWsUri);
+  console.info("[candor] fetching shielded addresses…");
+  const shieldedAddresses = await withTimeout(connectedAPI.getShieldedAddresses(), 10_000, "getShieldedAddresses");
 
   // WalletProvider wrapper — balances transactions through the wallet
-  const shieldedAddresses = await connectedAPI.getShieldedAddresses();
   const walletProvider = {
     getCoinPublicKey: () => shieldedAddresses.shieldedCoinPublicKey,
     getEncryptionPublicKey: () => shieldedAddresses.shieldedEncryptionPublicKey,
@@ -171,6 +223,7 @@ export async function connectCandor(networkId = "preprod"): Promise<CandorProvid
     },
   };
 
+  console.info("[candor] providers ready");
   return {
     connectedAPI,
     zkConfigProvider,

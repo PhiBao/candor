@@ -27,6 +27,13 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      // Lace's service worker blocks direct 127.0.0.1 fetches from the page;
+      // route proof-server calls through this same-origin proxy instead.
+      "/proof-server": {
+        target: "http://127.0.0.1:6300",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/proof-server/, ""),
+      },
       "/issuer": {
         target: "http://localhost:8787",
         changeOrigin: true,
