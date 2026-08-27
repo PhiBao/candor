@@ -49,6 +49,15 @@ export default function App() {
     (window as any).__candorChain = chain;
   }, [chain]);
   const [operatorOpen, setOperatorOpen] = useState(false);
+  const [laceReady, setLaceReady] = useState(() => isLaceAvailable());
+  useEffect(() => {
+    // extensions inject after page load — re-check on focus and briefly after mount
+    const recheck = () => setLaceReady(isLaceAvailable());
+    const t1 = setTimeout(recheck, 1500);
+    const t2 = setTimeout(recheck, 5000);
+    window.addEventListener("focus", recheck);
+    return () => { clearTimeout(t1); clearTimeout(t2); window.removeEventListener("focus", recheck); };
+  }, []);
   const contractAddress = getStoredContractAddress();
 
   // keep ledger in sync with storage events (demo)
@@ -94,14 +103,17 @@ export default function App() {
             <button className="btn btn-ghost small" onClick={() => { resetLedger(); setLedger(loadLedger()); showToast("Demo ledger reset"); }}>
               Reset demo
             </button>
-            {isLaceAvailable() && (
-              chain ? (
-                <span className="badge" title={contractAddress ?? "no contract yet"}>
-                  <span className="mono small">chain</span> <strong>Preprod ✓</strong>
-                </span>
-              ) : (
-                <button className="btn small" onClick={connectChain}>Connect Lace</button>
-              )
+            {chain ? (
+              <span className="badge" title={contractAddress ?? "no contract yet"}>
+                <span className="mono small">chain</span> <strong>Preprod ✓</strong>
+              </span>
+            ) : laceReady ? (
+              <button className="btn small" onClick={connectChain}>Connect Lace</button>
+            ) : (
+              <a className="btn small" href="https://www.lace.io/" target="_blank" rel="noreferrer"
+                 title="Install the Lace extension (with Midnight support), then reload this page">
+                Install Lace
+              </a>
             )}
             {chain && (
               <button className="btn btn-ghost small" onClick={() => setOperatorOpen(true)} title="Deploy / enroll / epoch">Operator</button>
