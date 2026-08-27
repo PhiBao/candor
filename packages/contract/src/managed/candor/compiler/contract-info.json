@@ -49,6 +49,18 @@
       }
     },
     {
+      "name": "nextEpoch",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
       "name": "getHistogram",
       "pure": false,
       "proof": true,
@@ -72,11 +84,31 @@
         "type-name": "Uint",
         "maxval": 18446744073709551615
       }
+    },
+    {
+      "name": "readEpoch",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+      ],
+      "result-type": {
+        "type-name": "Uint",
+        "maxval": 18446744073709551615
+      }
     }
   ],
   "witnesses": [
     {
       "name": "secret",
+      "arguments": [
+      ],
+      "result type": {
+        "type-name": "Bytes",
+        "length": 32
+      }
+    },
+    {
+      "name": "issuerKey",
       "arguments": [
       ],
       "result type": {
@@ -123,10 +155,18 @@
       }
     },
     {
-      "name": "epoch",
+      "name": "epochCount",
       "index": 3,
       "exported": true,
-      "storage": "Counter"
+      "storage": "Map",
+      "key": {
+        "type-name": "Bytes",
+        "length": 1
+      },
+      "value": {
+        "type-name": "Uint",
+        "maxval": 18446744073709551615
+      }
     },
     {
       "name": "issuer",

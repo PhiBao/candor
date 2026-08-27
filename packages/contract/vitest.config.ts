@@ -3,10 +3,11 @@ import path from "node:path";
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "@candor/shared": path.resolve(__dirname, "../shared/src/index.ts"),
-      "@candor/shared/mockLedger": path.resolve(__dirname, "../shared/src/mockLedger.ts"),
-    },
+    alias: [
+      { find: /^@candor\/shared\/hash$/, replacement: path.resolve(__dirname, "../shared/src/hash.ts") },
+      { find: /^@candor\/shared\/mockLedger$/, replacement: path.resolve(__dirname, "../shared/src/mockLedger.ts") },
+      { find: /^@candor\/shared$/, replacement: path.resolve(__dirname, "../shared/src/index.ts") },
+    ],
   },
   test: {
     environment: "node",

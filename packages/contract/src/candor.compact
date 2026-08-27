@@ -1,56 +1,79 @@
 pragma language_version 0.23;
 import CompactStandardLibrary;
 
-// Wave 1 Candor contract — verified, unlinkable, aggregate-only.
-// Trust note: Wave 1 membership is Set<Bytes<32>> with disclosed leaf.
-// The specific member index is visible on-chain (but not the salary).
-// Wave 2 replaces this with HistoricMerkleTree + merkleTreePathRoot for fully private membership.
-// Nullifier is one per epoch globally, blocking double-submit (and employer stuffing).
+// Candor — verified, unlinkable, aggregate-only compensation truth.
+//
+// Ledger design (Wave 1):
+//   members    — membership leaves: persistentHash(["candor:member:v1", secret])
+//                Insertion is issuer-gated: the enroll circuit verifies the caller's
+//                secret key against the public issuer commitment before inserting.
+//   nullifiers — epoch-scoped: persistentHash(["candor:nf:v1", currentEpoch, secret]).
+//                Blocks one submission per verified member per epoch; a new epoch
+//                (issuer calls nextEpoch) re-opens submission for everyone.
+//   histogram  — aggregate counts per (cutKey, bucket). Only bucket counts are
+//                public; exact salaries are never sum-revealed.
+//   epochCount — singleton Map used as the epoch counter. Counter is not readable
+//                inside circuits in language 0.23, so the epoch lives in a map cell.
+//   issuer     — public commitment to the issuer's secret key:
+//                persistentHash(["candor:issuer:v1", issuerKey]).
 
 export ledger members: Set<Bytes<32>>;
 export ledger nullifiers: Set<Bytes<32>>;
 export ledger histogram: Map<Bytes<32>, Uint<64>>;
-export ledger epoch: Counter;
+export ledger epochCount: Map<Bytes<1>, Uint<64>>;
 export ledger issuer: Bytes<32>;
 
 constructor(issuerCommit: Bytes<32>) {
   issuer = disclose(issuerCommit);
-  epoch.increment(1);
+  epochCount.insert(pad(1, "e"), 1 as Uint<64>);
 }
 
 witness secret(): Bytes<32>;
+witness issuerKey(): Bytes<32>;
 
 // Submit one bucketed salary for a cut.
 // cutKey: hash of "family:level:region" (e.g. "engineering:L5:remote-us") as Bytes<32>
 // bucket: 0..9 (see shared/src/index.ts BUCKETS)
+// Disclosed: cutKey, bucket. Never: secret, exact salary, epoch nullifier preimage.
 export circuit submit(cutKey: Bytes<32>, bucket: Uint<8>): [] {
   assert(bucket < 10, "bucket out of range");
 
   const mySecret = secret();
-  // Leaf committed at enrollment: persistentHash([domain, secret])
+  // Membership: leaf committed at enrollment (user sent leaf — never the secret — to issuer)
   const leaf = persistentHash<Vector<2, Bytes<32>>>([pad(32, "candor:member:v1"), mySecret]);
-  const disclosedLeaf = disclose(leaf);
-  assert(members.member(disclosedLeaf), "not a member");
+  assert(members.member(disclose(leaf)), "not a member");
 
-  // Epoch nullifier — deterministic from secret, unlinkable without secret
-  const nf = disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "candor:nf:v1"), mySecret]));
+  // Epoch-scoped nullifier: epoch is read from ledger state, so callers cannot lie
+  // about which epoch they are in. After nextEpoch(), everyone may submit again.
+  const curEpoch = epochCount.lookup(pad(1, "e"));
+  const nf = disclose(persistentHash<[Bytes<32>, Uint<64>, Bytes<32>]>([pad(32, "candor:nf:v1"), curEpoch, mySecret]));
   assert(!nullifiers.member(nf), "already submitted this epoch");
   nullifiers.insert(nf);
 
-  // Histogram bucket key: hash(cutKey, bucket) — disclosed bucket is the intended public output
+  // Histogram bucket key: hash(cutKey, bucket) — disclosed bucket is the public output
   const bKey = disclose(persistentHash<[Bytes<32>, Uint<8>]>([cutKey, bucket]));
   if (!histogram.member(bKey)) {
     histogram.insert(bKey, 1 as Uint<64>);
   } else {
-    const cur = histogram.lookup(bKey);
-    histogram.insert(bKey, cur + 1 as Uint<64>);
+    histogram.insert(bKey, histogram.lookup(bKey) + 1 as Uint<64>);
   }
 }
 
-// Issuer enrolls a member leaf. Wave 1: no on-chain access control beyond off-chain issuer auth;
-// leaf log is append-only and rate-limited off-chain. Wave 2 adds on-chain issuer key check.
+// Issuer enrolls a member leaf. Caller must hold the issuer secret key; the derived
+// commitment must equal the public `issuer` value set at deployment.
 export circuit enroll(memberLeaf: Bytes<32>): [] {
+  const commit = disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "candor:issuer:v1"), issuerKey()]));
+  assert(commit == issuer, "enroll: caller is not the issuer");
   members.insert(disclose(memberLeaf));
+}
+
+// Issuer advances the epoch. All previously spent nullifiers become stale, so every
+// verified member may contribute once more in the new epoch.
+export circuit nextEpoch(): [] {
+  const commit = disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "candor:issuer:v1"), issuerKey()]));
+  assert(commit == issuer, "nextEpoch: caller is not the issuer");
+  const cur = epochCount.lookup(pad(1, "e"));
+  epochCount.insert(pad(1, "e"), cur + 1 as Uint<64>);
 }
 
 // Read-only view for indexer / public pages.
@@ -61,5 +84,14 @@ export circuit getHistogram(cutKey: Bytes<32>, bucket: Uint<8>): Uint<64> {
     return 0 as Uint<64>;
   } else {
     return histogram.lookup(bKey);
+  }
+}
+
+// Read-only: current epoch number (also queryable via ledger state by the indexer).
+export circuit readEpoch(): Uint<64> {
+  if (!epochCount.member(pad(1, "e"))) {
+    return 0 as Uint<64>;
+  } else {
+    return epochCount.lookup(pad(1, "e"));
   }
 }

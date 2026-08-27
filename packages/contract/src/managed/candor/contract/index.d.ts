@@ -2,6 +2,7 @@ import type * as __compactRuntime from '@midnight-ntwrk/compact-runtime';
 
 export type Witnesses<PS> = {
   secret(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, Uint8Array];
+  issuerKey(context: __compactRuntime.WitnessContext<Ledger, PS>): [PS, Uint8Array];
 }
 
 export type ImpureCircuits<PS> = {
@@ -9,9 +10,11 @@ export type ImpureCircuits<PS> = {
          cutKey_0: Uint8Array,
          bucket_0: bigint): __compactRuntime.CircuitResults<PS, []>;
   enroll(context: __compactRuntime.CircuitContext<PS>, memberLeaf_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
+  nextEpoch(context: __compactRuntime.CircuitContext<PS>): __compactRuntime.CircuitResults<PS, []>;
   getHistogram(context: __compactRuntime.CircuitContext<PS>,
                cutKey_0: Uint8Array,
                bucket_0: bigint): __compactRuntime.CircuitResults<PS, bigint>;
+  readEpoch(context: __compactRuntime.CircuitContext<PS>): __compactRuntime.CircuitResults<PS, bigint>;
 }
 
 export type ProvableCircuits<PS> = {
@@ -19,9 +22,11 @@ export type ProvableCircuits<PS> = {
          cutKey_0: Uint8Array,
          bucket_0: bigint): __compactRuntime.CircuitResults<PS, []>;
   enroll(context: __compactRuntime.CircuitContext<PS>, memberLeaf_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
+  nextEpoch(context: __compactRuntime.CircuitContext<PS>): __compactRuntime.CircuitResults<PS, []>;
   getHistogram(context: __compactRuntime.CircuitContext<PS>,
                cutKey_0: Uint8Array,
                bucket_0: bigint): __compactRuntime.CircuitResults<PS, bigint>;
+  readEpoch(context: __compactRuntime.CircuitContext<PS>): __compactRuntime.CircuitResults<PS, bigint>;
 }
 
 export type PureCircuits = {
@@ -32,9 +37,11 @@ export type Circuits<PS> = {
          cutKey_0: Uint8Array,
          bucket_0: bigint): __compactRuntime.CircuitResults<PS, []>;
   enroll(context: __compactRuntime.CircuitContext<PS>, memberLeaf_0: Uint8Array): __compactRuntime.CircuitResults<PS, []>;
+  nextEpoch(context: __compactRuntime.CircuitContext<PS>): __compactRuntime.CircuitResults<PS, []>;
   getHistogram(context: __compactRuntime.CircuitContext<PS>,
                cutKey_0: Uint8Array,
                bucket_0: bigint): __compactRuntime.CircuitResults<PS, bigint>;
+  readEpoch(context: __compactRuntime.CircuitContext<PS>): __compactRuntime.CircuitResults<PS, bigint>;
 }
 
 export type Ledger = {
@@ -57,7 +64,13 @@ export type Ledger = {
     lookup(key_0: Uint8Array): bigint;
     [Symbol.iterator](): Iterator<[Uint8Array, bigint]>
   };
-  readonly epoch: bigint;
+  epochCount: {
+    isEmpty(): boolean;
+    size(): bigint;
+    member(key_0: Uint8Array): boolean;
+    lookup(key_0: Uint8Array): bigint;
+    [Symbol.iterator](): Iterator<[Uint8Array, bigint]>
+  };
   readonly issuer: Uint8Array;
 }
 

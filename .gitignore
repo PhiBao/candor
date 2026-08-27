@@ -50,3 +50,6 @@ coverage/
 .idea/
 *.swp
 *.swo
+
+# tsc emit of vite config
+apps/web/vite.config.js

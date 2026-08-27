@@ -64,11 +64,11 @@ packages/issuer     email code → leaf insertion, append-only log, rate limits
 apps/web            Vite + React: public cut grid + wizard + percentile
 ```
 
-**Ledger:** `members: Set<Bytes<32>>`, `nullifiers: Set<Bytes<32>>`, `histogram: Map<Bytes<32>, Uint<64>>` (key = persistentHash([cutKey, bucket])), `epoch: Counter`, `issuer: Bytes<32>`.
+**Ledger:** `members: Set<Bytes<32>>`, `nullifiers: Set<Bytes<32>>`, `histogram: Map<Bytes<32>, Uint<64>>` (key = persistentHash([cutKey, bucket])), `epochCount: Map<Bytes<1>, Uint<64>>` (readable epoch cell), `issuer: Bytes<32>` (commitment; `enroll`/`nextEpoch` are issuer-gated on-chain).
 
-**Circuit submit:** leaf = persistentHash([pad(32,"candor:member:v1"), secret]), check members, nf = persistentHash([pad(32,"candor:nf:v1"), secret]), check nullifiers, bKey = persistentHash([cutKey, bucket]), histogram increment. Only cutKey, bucket disclosed.
+**Circuit submit:** leaf = persistentHash([pad(32,"candor:member:v1"), secret]), check members, nf = persistentHash([pad(32,"candor:nf:v1"), epoch, secret]) with epoch read from ledger, check nullifiers, bKey = persistentHash([cutKey, bucket]), histogram increment. Only cutKey, bucket disclosed.
 
-**Trust boundary:** issuer learns who is a member, cannot link submission to member (never sees secret). Wave 1 discloses leaf for Set membership; Wave 2 replaces with HistoricMerkleTree + merkleTreePathRoot for private membership.
+**Trust boundary:** issuer learns who is a member, cannot link submission to member (never sees secret). Wave 1 discloses leaf for Set membership; Wave 2 replaces with HistoricMerkleTree + merkleTreePathRoot for private membership. Nullifier is epoch-scoped and unlinkable (issuer never sees secret).
 
 **Read path:** indexer GraphQL → ledger(state.data) → static cut pages. No wallet.
 
@@ -88,7 +88,7 @@ Qualitative: 10 interviews — “do you believe we can’t link this to you, an
 
 ## 11. Security and failure considerations
 
-**Privacy:** histogram buckets not sum (differential leak: sum deltas reveal exact salaries — regression test asserts delta is exactly one bucket increment); k-anonymity gate; timing correlation (verification and submission decoupled, documented residual risk); nullifier domain separation (epoch + contract id; Wave 1 epoch is static, Wave 2 adds contract id); secret loss is unrecoverable by design (must surface in UI); proof server must be user-local, hosted proving permanently rejected.
+**Privacy:** histogram buckets not sum (differential leak: sum deltas reveal exact salaries — regression test asserts delta is exactly one bucket increment); k-anonymity gate; timing correlation (verification and submission decoupled, documented residual risk); nullifier domain separation and epoch-scoping (epoch read from ledger state; Wave 2 adds contract id); secret loss is unrecoverable by design (must surface in UI); proof server must be user-local, hosted proving permanently rejected.
 
 **Integrity:** employer astroturfing blocked by verified membership + one nullifier per epoch (Glassdoor weakness fixed); issuer compromise can mint fake members and stuff histogram — mitigate with public append-only leaf log + per-epoch caps, decentralization is Wave 2/3 primary goal; truthfulness — ZK proves bucket range, not honesty — guarantee is one submission per verified person, not truth (still stronger than incumbents), outlier detection over time.
 

@@ -33,18 +33,20 @@ apps/web            Next.js-style public cut pages + guided contribute wizard (V
 
 **Ledger (Wave 1)**
 
-- `members: Set<Bytes<32>>` — leaf = `persistentHash([pad(32,"candor:member:v1"), secret])`
-- `nullifiers: Set<Bytes<32>>` — `persistentHash([pad(32,"candor:nf:v1"), secret])` — one per epoch
+- `members: Set<Bytes<32>>` — leaf = `persistentHash([pad(32,"candor:member:v1"), secret])`, insertion issuer-gated on-chain
+- `nullifiers: Set<Bytes<32>>` — **epoch-scoped**: `persistentHash([pad(32,"candor:nf:v1"), epoch, secret])` — one per member per epoch
 - `histogram: Map<Bytes<32>, Uint<64>>` — key = `persistentHash([cutKey, bucket])`
-- `epoch: Counter` — increments per quarter; submission valid for one epoch
-- `issuer: Bytes<32>`
+- `epochCount: Map<Bytes<1>, Uint<64>>` — readable epoch cell (issuer advances via `nextEpoch`)
+- `issuer: Bytes<32>` — public commitment to the issuer's secret key
 
 **Circuit `submit(cutKey, bucket)`**
 
 1. Derive leaf from `secret()` witness, check `members.member(disclose(leaf))`
-2. Derive epoch nullifier, check not in `nullifiers`, insert
+2. Read epoch from ledger, derive epoch nullifier, check not in `nullifiers`, insert
 3. Bucket range check (`bucket < 10`), derive `bKey = persistentHash([cutKey, bucket])`, increment histogram
 4. Only `cutKey` and `bucket` are disclosed; secret and exact salary stay private
+
+**Circuit `enroll(memberLeaf)`** — issuer-gated: asserts `persistentHash([pad(32,"candor:issuer:v1"), issuerKey()]) == issuer` before inserting, so only the issuer key holder can mint members.
 
 **Trust boundary (stated plainly)**
 

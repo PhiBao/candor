@@ -1,73 +1,65 @@
 /**
- * Mock ledger that mirrors on-chain Candor semantics for local demo & tests.
- * No Midnight node required. Logic matches candor.compact:
- * - members: Set<leaf>
- * - nullifiers: Set<nf>
- * - histogram: Map<bKey, count>
- * This is the "proof-server-local" demo path; replace with real indexer/provider in Preprod.
+ * Mock ledger mirroring candor.compact (v2) semantics for local demo & tests.
+ * No Midnight node required. Mirrors:
+ * - members: Set<leaf>, insertion issuer-gated on-chain (mock trusts caller)
+ * - nullifiers: epoch-scoped — hash(domain, epoch, secret); nextEpoch re-opens
+ * - histogram: Map<bKey, count> keyed by canonical bucketKeyBytes
+ * - epoch: readable counter cell (singleton map on-chain)
+ * Hashing uses shared/src/hash.ts — bit-identical to circuit persistentHash.
  */
-import { BUCKET_COUNT, K_ANONYMITY, type Cut, bucketKey, cutKeyString } from "./index.js";
-import { bytesToHex } from "./index.js";
-
-async function sha256(data: Uint8Array): Promise<Uint8Array> {
-  const h = await crypto.subtle.digest("SHA-256", data as BufferSource);
-  return new Uint8Array(h);
-}
-
-async function leafForSecret(secret: Uint8Array): Promise<string> {
-  const pad = new TextEncoder().encode("candor:member:v1".padEnd(32, "\0"));
-  const buf = new Uint8Array(pad.length + secret.length);
-  buf.set(pad, 0);
-  buf.set(secret, pad.length);
-  return bytesToHex(await sha256(buf));
-}
-
-async function nullifierForSecret(secret: Uint8Array): Promise<string> {
-  const pad = new TextEncoder().encode("candor:nf:v1".padEnd(32, "\0"));
-  const buf = new Uint8Array(pad.length + secret.length);
-  buf.set(pad, 0);
-  buf.set(secret, pad.length);
-  return bytesToHex(await sha256(buf));
-}
+import { BUCKET_COUNT, K_ANONYMITY, type Cut, cutKeyString } from "./index.js";
+import { memberLeaf, epochNullifier, bucketKeyBytes, cutKeyBytes, bytesToHex } from "./hash.js";
 
 export type MockLedgerState = {
   members: Set<string>; // hex leaf
-  nullifiers: Set<string>; // hex nf
-  histogram: Map<string, number>; // bKey -> count
-  epoch: number;
+  nullifiers: Set<string>; // hex epoch nullifier
+  histogram: Map<string, number>; // hex bKey -> count
+  epoch: bigint;
 };
 
 export function createMockLedger(): MockLedgerState {
-  return { members: new Set(), nullifiers: new Set(), histogram: new Map(), epoch: 1 };
+  return { members: new Set(), nullifiers: new Set(), histogram: new Map(), epoch: 1n };
 }
 
-export async function enrollMember(state: MockLedgerState, secret: Uint8Array): Promise<string> {
-  const leaf = await leafForSecret(secret);
+export function enrollMember(state: MockLedgerState, secret: Uint8Array): string {
+  const leaf = bytesToHex(memberLeaf(secret));
   state.members.add(leaf);
   return leaf;
 }
 
-export async function submitContribution(
+export function submitContribution(
   state: MockLedgerState,
   secret: Uint8Array,
   cut: Cut,
   bucket: number,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (bucket < 0 || bucket >= BUCKET_COUNT) return { ok: false, reason: "bucket out of range" };
-  const leaf = await leafForSecret(secret);
+): { ok: true } | { ok: false; reason: string } {
+  if (!Number.isInteger(bucket) || bucket < 0 || bucket >= BUCKET_COUNT) {
+    return { ok: false, reason: "bucket out of range" };
+  }
+  const leaf = bytesToHex(memberLeaf(secret));
   if (!state.members.has(leaf)) return { ok: false, reason: "not a member" };
-  const nf = await nullifierForSecret(secret);
+  const nf = bytesToHex(epochNullifier(state.epoch, secret));
   if (state.nullifiers.has(nf)) return { ok: false, reason: "already submitted this epoch" };
   state.nullifiers.add(nf);
-  const key = bucketKey(cut, bucket);
+  const key = bytesToHex(bucketKeyBytes(cutKeyBytes(cutKeyString(cut)), BigInt(bucket)));
   state.histogram.set(key, (state.histogram.get(key) ?? 0) + 1);
   return { ok: true };
 }
 
+export function nextEpoch(state: MockLedgerState): bigint {
+  state.epoch += 1n;
+  return state.epoch;
+}
+
+export function currentEpoch(state: MockLedgerState): bigint {
+  return state.epoch;
+}
+
 export function histogramForCut(state: MockLedgerState, cut: Cut): number[] {
+  const ck = cutKeyBytes(cutKeyString(cut));
   const hist = Array(BUCKET_COUNT).fill(0);
   for (let b = 0; b < BUCKET_COUNT; b++) {
-    hist[b] = state.histogram.get(bucketKey(cut, b)) ?? 0;
+    hist[b] = state.histogram.get(bytesToHex(bucketKeyBytes(ck, BigInt(b)))) ?? 0;
   }
   return hist;
 }
@@ -82,9 +74,8 @@ export function allUnlockedCuts(state: MockLedgerState, cuts: Cut[]): Cut[] {
 }
 
 // Differential-leak regression: histogram delta must never reveal exact salary,
-// only the bucket index. This helper asserts that property.
+// only the bucket index (exactly one key changes, by exactly 1).
 export function assertNoExactLeak(prev: Map<string, number>, next: Map<string, number>): boolean {
-  // Count keys whose value changed — must be exactly 1 and delta exactly 1
   let changed = 0;
   for (const [k, v] of next) {
     const pv = prev.get(k) ?? 0;
