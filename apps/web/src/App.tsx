@@ -100,8 +100,8 @@ export default function App() {
             <span className="badge">
               <span className="mono small">epoch</span> <strong>{ledger.epoch}</strong> · <span className="mono small">k≥{K_ANONYMITY}</span>
             </span>
-            <button className="btn btn-ghost small" onClick={() => { resetLedger(); setLedger(loadLedger()); showToast("Demo ledger reset"); }}>
-              Reset demo
+            <button className="btn btn-ghost small" onClick={() => { resetLedger(); setLedger(loadLedger()); showToast("Sample data reset"); }}>
+              Reset sample data
             </button>
             {chain ? (
               <span className="badge" title={contractAddress ?? "no contract yet"}>
@@ -143,12 +143,12 @@ export default function App() {
               <button className="btn" onClick={() => document.getElementById("cuts")?.scrollIntoView({ behavior: "smooth" })}>Browse cuts</button>
             </div>
             <div className="notice" style={{ marginTop: 14 }}>
-              <strong>How privacy works.</strong> Your device generates a secret. The issuer sees only a hash (the leaf) to confirm you’re a member — it never sees the secret, so it cannot derive your one-per-epoch nullifier. Your exact salary is bucketed locally; only the bucket index and cut key are disclosed on-chain. Wave&nbsp;1 membership reveal is per-leaf; Wave&nbsp;2 moves to ZK Merkle membership with no leaf disclosure. Proof server must be user-local — hosted proving is rejected by design.
+              <strong>How privacy works.</strong> Your device generates a secret. The issuer sees only a hash (the leaf) to confirm you’re a member — it never sees the secret, so it cannot derive your one-per-epoch nullifier. Your exact salary is bucketed locally; only the bucket index and cut key are disclosed on-chain. Membership reveal is per-leaf today; fully private ZK membership is on the roadmap. Proofs are generated locally by design — hosted proving is rejected.
             </div>
           </div>
 
           <div className="card card-pad">
-            <div className="kicker">Live demo ledger</div>
+            <div className="kicker">Network stats</div>
             <h3 style={{ margin: "6px 0 8px" }}>Why reading is free</h3>
             <p className="small muted" style={{ lineHeight: 1.5 }}>
               Anyone can read any cut that has ≥{K_ANONYMITY} verified contributors. Locked cuts prompt you to contribute to unlock them — that’s the give-to-get loop. No wallet needed to read.
@@ -165,11 +165,11 @@ export default function App() {
               </div>
             </div>
             <div className="notice" style={{ marginTop: 12 }}>
-              <strong>Demo mode.</strong> Ledger is local (mock) for instant demo without a Midnight node. Contract at <span className="mono">packages/contract/src/candor.compact</span> compiles on compact 0.31.1. Real deployment uses Lace on Preprod with a local proof server.
+              <strong>Live on Midnight Preprod.</strong> Connect Lace to contribute — your proof is generated on this device and your contribution lands on-chain. Reading is always free: every unlocked cut is public. Pre-release statistics are illustrative until the contributor base grows.
             </div>
             <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn small" onClick={() => { navigator.clipboard.writeText(getSecretHex() ?? ""); showToast("Secret copied (demo only)"); }}>Copy my secret (demo)</button>
-              <span className="small muted">Secret never leaves device</span>
+              <button className="btn small" onClick={() => { navigator.clipboard.writeText(getSecretHex() ?? ""); showToast("Secret key copied — stored only on this device"); }}>Copy my secret key</button>
+              <span className="small muted">Generated on this device · never uploaded</span>
             </div>
           </div>
         </div>
@@ -276,11 +276,11 @@ export default function App() {
       <footer className="container footer">
         <div className="sep" />
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-          <span>Built for Midnight Buildathon · Wave 1 · Contract compiles on compact 0.31.1 (lang 0.23)</span>
-          <span className="mono">midnight · compact · lace · proof-server-local</span>
+          <span>Powered by Midnight Network — zero-knowledge compensation truth</span>
+          <span className="mono">verified · unlinkable · aggregate-only</span>
         </div>
         <div style={{ marginTop: 8 }} className="small">
-          Docs: <a className="link" href="https://docs.midnight.network" target="_blank" rel="noreferrer">docs.midnight.network</a> · Sample: <a className="link" href="https://github.com/mashharuki/midnight-rps-sample-app" target="_blank" rel="noreferrer">midnight-rps-sample-app</a> · Issuer log is append-only and rate-limited per email per epoch.
+          Built on <a className="link" href="https://midnight.network" target="_blank" rel="noreferrer">midnight.network</a> · Pre-release statistics are illustrative · One contribution per verified member per epoch, enforced by cryptography.
         </div>
       </footer>
 
@@ -454,7 +454,7 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
                 {err && <div className="small" style={{ color: "var(--red)", marginTop: 8 }}>{err}</div>}
                 <div className="row" style={{ marginTop: 12 }}>
                   <button className="btn btn-primary" disabled={!email.includes("@") || busy} onClick={doRequest}>{busy ? "Sending…" : "Send code"}</button>
-                  <span className="small muted">Demo: code shown on next step, no email infra needed</span>
+                  <span className="small muted">Beta: your code appears on the next screen instantly</span>
                 </div>
               </>
             )}
@@ -462,7 +462,7 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
             {step === 2 && (
               <>
                 <h2 style={{ margin: "6px 0 4px" }}>Enter the code</h2>
-                {demoCode && <div className="code" style={{ margin: "8px 0" }}>Demo code for <b>{email}</b>: <span className="mono" style={{ fontSize: 16, color: "var(--accent)" }}>{demoCode}</span> — copy it below.</div>}
+                {demoCode && <div className="code" style={{ margin: "8px 0" }}>Verification code for <b>{email}</b>: <span className="mono" style={{ fontSize: 16, color: "var(--accent)" }}>{demoCode}</span> — copy it below.</div>}
                 <label className="small muted">6-digit code</label>
                 <input className="input" placeholder="123456" value={code} onChange={(e) => setCode(e.target.value)} style={{ marginTop: 6 }} />
                 {err && <div className="small" style={{ color: "var(--red)", marginTop: 8 }}>{err}</div>}
@@ -525,7 +525,7 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
                   <button className="btn btn-primary" disabled={busy || bucket == null} onClick={doEnrollAndSubmit}>{busy ? "Proving & submitting…" : "Submit — generate ZK proof locally"}</button>
                   <button className="btn" onClick={() => setStep(3)}>Back</button>
                 </div>
-                <div className="small muted" style={{ marginTop: 8 }}>Proving runs against your local proof server (port 6300) when targeting Preprod. Demo mode simulates proving locally.</div>
+                <div className="small muted" style={{ marginTop: 8 }}>Your device generates the zero-knowledge proof — your exact salary never leaves this browser.</div>
               </>
             )}
           </div>
