@@ -106,6 +106,63 @@ Flow: connect Lace → issuer enrolls your membership leaf on-chain → you cont
 - **In scope for Wave 1**: one epoch, USD only, engineering levels L3–L7, role × level × region cuts (no company), histogram buckets, epoch nullifier, k≥5 gate (UI-enforced), issuer service, web wizard, Preprod deployment.
 - **Out of scope for Wave 1**: multi-issuer / zkEmail, employer product, monetization, equity valuation, multi-currency, mobile.
 
+## Vision
+
+Compensation is the last taboo number on the internet. The systems that answer it are
+either gameable (self-reported), de-anonymizing (persistent handles), or employer-owned
+(compliance tools workers never see). As work moves on-chain — salaries in stablecoins,
+grants in tokens, DAOs hiring globally — the gap widens: **the on-chain workforce has no
+truthful picture of what people like them earn.**
+
+Candor is building that picture: compensation truth as a public good, produced by
+verified workers, protected by zero-knowledge proofs, owned by no one. Workers free
+forever; the data layer monetizes on the company side.
+
+## Roadmap
+
+**Wave 1 — the trusted slice (current, live on Preprod)**
+
+- ✅ Compact contract deployed (`e7cf6f…53d`): verified membership, epoch nullifiers, aggregate-only histograms
+- ✅ Full flow with real transactions: connect Lace → enroll → prove on-device → submit
+- ✅ 15 cuts (engineering L3–L7 × 3 regions), k≥5 gate, percentile moment
+- ✅ Circuit test suite incl. differential-leak regression; deploy walkthrough for evaluators
+- ▶ Seeding sprint: one real community, one real epoch
+
+**Wave 2 — trustless membership**
+
+- ZK Merkle membership (`HistoricMerkleTree`) — no leaf disclosure on-chain at all
+- Issuer federation — no single party controls enrollment; public leaf-log audit
+- Historical epochs (trend lines: "how did this cut move in 6 months?")
+- Company dimension once volume supports k-anonymity; percentiles + richer aggregates
+
+**Wave 3 — scale**
+
+- Mobile (Kuira SDK candidate) — prove and contribute from a phone
+- zkEmail verification — remove the single trusted issuer entirely
+- Employer-side surface — pay-band analytics with compliance-grade aggregates
+- Token-comp modeling: grants, vesting, multi-currency
+
+## Go-to-market
+
+**Beachhead:** crypto-native ICs (1–10 yrs, remote, fiat + token comp). They already run
+Lace, they negotiate in public markets, and every existing comp tool is blind to their
+comp structure.
+
+**Channels (in order):**
+
+1. Midnight & Cardano Discords — the proving-required design is a feature for this crowd, not friction
+2. Farcaster / crypto X — percentile moments are designed to be shared ("I'm in the 61st percentile, verified, anonymously")
+3. DAO & protocol communities — one seeded community per epoch beats broad-and-empty
+
+**Growth loop (cryptographic, not cosmetic):** one nullifier per verified person per epoch →
+data goes stale quarterly → natural re-contribution triggers (reviews, offers, raises) →
+give-to-get: contributing unlocks deeper cuts → more contributors → more cuts clear k → more value.
+
+**Seeding plan (Wave 1):** a single community (one Discord/DAO), ~30 verified contributors,
+one epoch, target: 3+ cuts clearing k≥5. The falsifier we're testing: verification starts
+but nobody submits → proof friction is fatal; heavy reads and no contributions → the
+unlinkability claim isn't believed.
+
 ## License
 
 Apache-2.0

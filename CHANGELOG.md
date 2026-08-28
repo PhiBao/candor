@@ -1,48 +1,72 @@
 # Changelog
 
-All notable changes to Candor. This project follows the [Midnight Buildathon](https://app.akindo.io/wave-hacks/jaMZjqPOBsLXvjdG) three-wave program.
+What's new in Candor, organized by Buildathon wave. Written for everyone — judges,
+contributors, and future team members.
 
-## [0.3.0] — 2026-08-28 — Wave 1: live on Midnight Preprod
+## Wave 1 · v0.3.0 — Live on Midnight Preprod (2026-08-28)
 
-### 🎉 End-to-end verified
+### 🎉 Headline
 
-The complete pipeline runs against Midnight Preprod with a real Lace wallet:
+**Candor is live.** The full journey now runs on Midnight's public Preprod network with a
+real wallet: deploy → verify → contribute anonymously → see your percentile. Every step
+below shipped and was tested end-to-end with real transactions.
 
-**deploy → enroll → prove (on-device) → signed transaction → aggregate updates.**
+### New — what you can do now
 
-- Deployed contract: `e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d`
-- Proof generation runs on the contributor's own machine (local proof server, same-origin proxy) — the salary witness never leaves the device.
+- **Contribute for real.** Connect your Lace wallet, verify your work email, and submit a
+  bucketed salary to a live on-chain contract. Your proof is generated on your own device.
+- **Deploy & operate from the browser.** A new built-in Issuer Console lets the operator
+  deploy the contract, enroll verified members, and start a new epoch — no command line.
+- **Pick up where you left off.** Your secret key and session persist across page reloads;
+  the app shows clear connection status (connected wallet, network, contract).
+- **One-command local run.** `pnpm dev:all` starts the app and the verification service
+  together; a full deployment walkthrough is in `docs/DEPLOY.md`.
 
-### Added
-- **Browser chain path** — full Midnight.js 4.1.1 provider bundle: wallet-config-driven endpoints, `httpClientProofProvider` via a same-origin `/proof-server` proxy, in-memory private state seeded from the persistent user secret.
-- **Issuer console (operator UI)** — deploy the contract, enroll member leaves on-chain, advance the epoch. The issuer key witness never leaves the operator's browser.
-- **Contribute wizard chain branch** — real `submit` transactions from the UI; the mock-ledger demo path remains for zero-setup evaluation.
-- `nextEpoch` / `readEpoch` circuits; `GET /leaf` issuer endpoint; `pnpm dev:all` (web + issuer).
-- Docs: full `docs/DEPLOY.md` (Preprod walkthrough incl. tNIGHT→tDUST generation), demo script, this changelog.
+### Fixed — trust & reliability
+
+- **One contribution per person per epoch is now truly enforced** — previously a member
+  could theoretically bypass the limit; the rule is now airtight and resets each epoch.
+- **Only the issuer can add members** — a bug that would have allowed anyone to mint
+  fake memberships was closed; minting now requires the issuer's cryptographic approval.
+- **Smoother wallet connection** — Lace is now detected reliably (including when the
+  extension loads late), with clear status feedback at every step and simple recovery
+  when a wallet is missing.
+- **Fewer dead ends.** Fixed a series of browser-environment issues (missing browser
+  compatibility shims, stale cached data, misconfigured endpoints) that could cause a
+  blank page or a failed transaction; the app now guides you past each one.
+- **Clearer errors.** When something fails (for example, not enough tDUST), the message
+  now tells you what to do instead of showing a raw technical error.
+
+### For evaluators
+
+- Compiled contract artifacts are committed — run the demo without installing Midnight's compiler.
+- `docs/DEPLOY.md` covers the full Preprod path, including generating tDUST from tNIGHT.
+
+## Wave 1 · v0.2.0 — Hardened foundations (2026-08-27)
+
+### New
+
+- **A 13-test verification suite** that exercises the real contract logic (the same
+  program the chain runs) without needing a network — covering the happy path, and
+  proving that the system rejects double submissions, unverified members, and invalid inputs.
+- **A privacy regression test** that watches the public data after every contribution and
+  confirms it never reveals an individual salary — only a bucket index.
 
 ### Fixed
-- Nullifier is now **epoch-scoped** (hashes the ledger epoch) — one-submission-per-epoch is actually enforceable; `nextEpoch` re-opens submissions.
-- `enroll`/`nextEpoch` are **issuer-gated on-chain** (private `issuerKey` witness checked against the public commitment) — random wallets can no longer mint members.
-- Replaced unreadable `Counter` with a readable map cell (language 0.23 limitation).
-- Canonical TS↔circuit hashing (`@candor/shared/hash`) — bit-identical to `persistentHash`, asserted by tests.
-- Wallet detection follows the official example pattern (generic `window.midnight` scan, apiVersion 4.x) — Lace is found however it injects.
-- Deduped Midnight runtime via pnpm overrides (`onchain-runtime-v3@3.1.0`, `ledger-v8@8.1.1`) — two `_LedgerParameters` classes previously broke transcript partitioning.
-- Browser polyfills: `Buffer`, `events` builtin (dep pre-bundling alias), `isomorphic-ws` shim, absolute URLs for ZK config assets.
-- Stale compiled-contract assets: build script cleans `dist/managed` before copying; the web app serves the full managed dir (keys, zkir, contract metadata).
 
-## [0.2.0] — 2026-08-27 — Contract v2 + circuit test suite
+- The project is licensed **Apache-2.0** (per Buildathon requirements) with a clean,
+  reviewable commit history and an honest README status table.
 
-### Added
-- **13-test suite running the generated Compact circuits off-chain** (same ledger program the chain executes, minus proofs): happy path, double-submit rejected + `nextEpoch` re-opens, non-member rejected, out-of-range bucket, non-issuer rejection, TS↔circuit hash parity, differential-leak regression.
-- Compiled artifacts committed (5 circuits with proving keys) so evaluators run without the Compact toolchain.
+## Wave 1 · v0.1.0 — First working product (2026-08-27)
 
-### Changed
-- Apache-2.0 license (Buildathon requirement); clean commit history; honest README status table.
+### New
 
-## [0.1.0] — 2026-08-27 — Initial Wave 1 skeleton
-
-- Compact 0.31.1 contract (`candor.compact`): members, nullifiers, histogram, epoch cell, issuer commitment.
-- Shared domain model: role × level × region cuts (15), 10 USD buckets, k≥5 gate, mock ledger mirroring circuit semantics.
-- Issuer service (demo verification codes, append-only leaf log, per-epoch rate limits).
-- Web app: public cut pages, 4-step contribute wizard, percentile moment (mock ledger demo).
-- Docs: SPEC, SECURITY, DEMO guides.
+- **The Candor concept, working end-to-end in demo mode**: browse salary distributions by
+  role, level, and region (15 cuts) — no wallet needed to read.
+- **Anonymous contribution flow** in four steps: verify email → describe your role → see
+  your bucket → submit. Locked cuts unlock when the community contributes — give-to-get.
+- **The percentile moment**: after contributing, you see where you stand in your cut,
+  designed to be shared.
+- **Verification service** with an append-only, privacy-preserving audit log
+  (emails are never stored in full) and rate limits per email per epoch.
+- Product documentation: specification, security model, and demo guide.
