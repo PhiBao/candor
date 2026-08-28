@@ -1,0 +1,8 @@
+node_modules
+.git
+.env
+.env.*
+*.pptx
+docs/*.png
+apps/web/dist
+packages/*/dist

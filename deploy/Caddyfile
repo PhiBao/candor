@@ -1,0 +1,29 @@
+{
+	auto_https off
+}
+
+:8080 {
+	handle_path /issuer/* {
+		reverse_proxy {$ISSUER_URL} {
+			transport http {
+				tls
+				tls_server_name {$ISSUER_HOST}
+			}
+		}
+	}
+
+	handle_path /proof-server/* {
+		reverse_proxy {$PROOF_SERVER_URL} {
+			transport http {
+				tls
+				tls_server_name {$PROOF_SERVER_HOST}
+			}
+		}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

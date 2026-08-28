@@ -84,12 +84,22 @@ pnpm --filter @candor/contract deploy:preprod
 
 See `packages/contract/README.md` and `docs/DEPLOY.md`.
 
-## Live on Preprod
+## Live
 
-Contract deployed and verified end-to-end:
-`e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d`
+- **App:** https://candor-midnight-web.fly.dev
+- **Issuer service:** https://candor-midnight-issuer.fly.dev/health
+- **Contract:** `e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d`
 
-Flow: connect Lace → issuer enrolls your membership leaf on-chain → you contribute a bucketed salary (ZK proof generated on your device) → the aggregate updates. See [docs/DEPLOY.md](docs/DEPLOY.md) and [CHANGELOG.md](CHANGELOG.md).
+Verified end-to-end on Preprod
+
+Flow: connect Lace → issuer enrolls your membership leaf on-chain → you contribute a bucketed salary → the aggregate updates.
+
+> **Privacy note:** the hosted demo routes proof generation through a hosted proving
+> service (disclosed in the UI). For the full on-device privacy guarantee — where your
+> salary never leaves your machine — run Candor locally: see [docs/DEPLOY.md](docs/DEPLOY.md).
+
+Deploy your own instance: `fly deploy -c fly.issuer.toml` then `fly deploy -c fly.web.toml`
+(two Fly apps; see `deploy/` for Dockerfiles and the Caddyfile).
 
 ## Project status (honest, Wave 1 in progress)
 

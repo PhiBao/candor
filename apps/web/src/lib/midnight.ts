@@ -325,12 +325,14 @@ export async function nextEpochOnChain(
 // ---- session helpers -------------------------------------------------------
 
 const ADDR_KEY = "candor:contractAddress";
+// Baked at build time (fly deploy build arg) so visitors land on the deployed contract
+const BAKED_ADDRESS: string = (import.meta as any).env?.VITE_CONTRACT_ADDRESS ?? "";
 
 export function getStoredContractAddress(): string | null {
   try {
-    return localStorage.getItem(ADDR_KEY);
+    return localStorage.getItem(ADDR_KEY) || BAKED_ADDRESS || null;
   } catch {
-    return null;
+    return BAKED_ADDRESS || null;
   }
 }
 

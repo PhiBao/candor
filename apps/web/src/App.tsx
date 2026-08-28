@@ -525,7 +525,11 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
                   <button className="btn btn-primary" disabled={busy || bucket == null} onClick={doEnrollAndSubmit}>{busy ? "Proving & submitting…" : "Submit — generate ZK proof locally"}</button>
                   <button className="btn" onClick={() => setStep(3)}>Back</button>
                 </div>
-                <div className="small muted" style={{ marginTop: 8 }}>Your device generates the zero-knowledge proof — your exact salary never leaves this browser.</div>
+                <div className="small muted" style={{ marginTop: 8 }}>
+                    {(import.meta as any).env?.VITE_HOSTED_PROVER === "true"
+                      ? "Beta hosted demo: proof generation is routed through a hosted proving service over TLS. For full on-device privacy, run Candor locally — see the repo docs."
+                      : "Your device generates the zero-knowledge proof — your exact salary never leaves this browser."}
+                  </div>
               </>
             )}
           </div>

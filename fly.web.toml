@@ -1,0 +1,26 @@
+app = "candor-midnight-web"
+primary_region = "iad"
+
+[build]
+  dockerfile = "deploy/web.Dockerfile"
+
+  [build.args]
+    VITE_CONTRACT_ADDRESS = "e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d"
+    VITE_HOSTED_PROVER = "true"
+
+[env]
+  ISSUER_URL = "https://candor-midnight-issuer.fly.dev"
+  ISSUER_HOST = "candor-midnight-issuer.fly.dev"
+  PROOF_SERVER_URL = "https://proof-server.preprod.midnight.network"
+  PROOF_SERVER_HOST = "proof-server.preprod.midnight.network"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
