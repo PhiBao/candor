@@ -614,18 +614,21 @@ function OperatorPanel({
   const [leafHex, setLeafHex] = useState<string>("");
   const [enrollEmail, setEnrollEmail] = useState<string>("");
   const address = getStoredContractAddress();
+  const storedKey = localStorage.getItem("candor:issuerKey") ?? "";
+  const effectiveKey = (issuerKeyHex || storedKey).replace(/^0x/, "").trim();
+  const keyValid = /^[0-9a-fA-F]{64}$/.test(effectiveKey);
 
   const saveIssuerKey = () => {
     const clean = issuerKeyHex.replace(/^0x/, "").trim();
-    if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast("issuer key must be 64 hex chars (32 bytes)"); return; }
+    if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast(`issuer key must be 64 hex chars (got ${clean.length} chars)`); return; }
     localStorage.setItem("candor:issuerKey", clean);
     onToast("Issuer key saved (local only)");
   };
 
   const doDeploy = async () => {
     if (!chain) return;
-    const clean = issuerKeyHex.replace(/^0x/, "").trim();
-    if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast("set a valid issuer key first"); return; }
+    const clean = effectiveKey;
+    if (!keyValid) { onToast(`issuer key invalid (${clean.length} chars) — paste 64 hex chars and Save`); return; }
     setBusy(true);
     try {
       const deployed = await deployCandor(chain.providers, hexToBytes(clean));
@@ -640,8 +643,8 @@ function OperatorPanel({
 
   const doEnroll = async () => {
     if (!chain || !address) { onToast("deploy first"); return; }
-    const clean = issuerKeyHex.replace(/^0x/, "").trim();
-    if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast("set a valid issuer key first"); return; }
+    const clean = effectiveKey;
+    if (!keyValid) { onToast(`issuer key invalid (${clean.length} chars) — paste 64 hex chars and Save`); return; }
     setBusy(true);
     try {
       await enrollOnChain(chain.providers, address, {
@@ -672,8 +675,8 @@ function OperatorPanel({
 
   const doNextEpoch = async () => {
     if (!chain || !address) { onToast("deploy first"); return; }
-    const clean = issuerKeyHex.replace(/^0x/, "").trim();
-    if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast("set a valid issuer key first"); return; }
+    const clean = effectiveKey;
+    if (!keyValid) { onToast(`issuer key invalid (${clean.length} chars) — paste 64 hex chars and Save`); return; }
     setBusy(true);
     try {
       await nextEpochOnChain(chain.providers, address, { issuerKey: hexToBytes(clean) });
@@ -696,7 +699,12 @@ function OperatorPanel({
               epoch — nothing else. It never sees contributor secrets or salaries.
             </p>
 
-            <label className="small muted">Issuer secret key (hex, stays in this browser)</label>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <label className="small muted">Issuer secret key (hex, stays in this browser)</label>
+              <span className="small" style={{ color: keyValid ? "var(--green)" : "var(--red)" }}>
+                {keyValid ? "✓ key loaded" : "✗ no key"}
+              </span>
+            </div>
             <div className="row" style={{ gap: 8, marginTop: 6 }}>
               <input className="input" value={issuerKeyHex} onChange={(e) => setIssuerKeyHex(e.target.value)} placeholder="64 hex chars" />
               <button className="btn small" onClick={saveIssuerKey}>Save</button>
