@@ -29,6 +29,11 @@ export default defineConfig({
     proxy: {
       // Lace's service worker blocks direct 127.0.0.1 fetches from the page;
       // route proof-server calls through this same-origin proxy instead.
+      "/indexer": {
+        target: "https://blockfrost.lw.iog.io",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/indexer/, ""),
+      },
       "/proof-server": {
         target: "http://127.0.0.1:6300",
         changeOrigin: true,

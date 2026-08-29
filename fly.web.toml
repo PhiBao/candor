@@ -11,6 +11,8 @@ primary_region = "iad"
 [env]
   ISSUER_URL = "https://candor-midnight-issuer.fly.dev"
   ISSUER_HOST = "candor-midnight-issuer.fly.dev"
+  INDEXER_URL = "https://blockfrost.lw.iog.io"
+  INDEXER_HOST = "blockfrost.lw.iog.io"
   PROOF_SERVER_URL = "https://proof-server.preprod.midnight.network"
   PROOF_SERVER_HOST = "proof-server.preprod.midnight.network"
 

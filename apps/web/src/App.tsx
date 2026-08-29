@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   BUCKETS,
   K_ANONYMITY,
@@ -24,27 +24,83 @@ import {
   loadMyContribs,
 } from "./lib/ledger";
 import { requestCode, confirmCode, enrollLeaf } from "./lib/issuer";
-import {
-  isLaceAvailable,
-  connectCandor,
-  deployCandor,
-  enrollOnChain,
-  nextEpochOnChain,
-  submitOnChain,
-  getStoredContractAddress,
-  setStoredContractAddress,
-  type CandorProviders,
-} from "./lib/midnight";
-import { memberLeaf, cutKeyBytes, bytesToHex } from "@candor/shared/hash";
+import type { CandorProviders } from "./lib/midnight";
+import { isLaceAvailable, getStoredContractAddress, setStoredContractAddress } from "./lib/session";
+import type { LedgerSnapshot } from "./lib/ledger";
+
+// live on-chain reads (lazy — wasm loads on demand)
+const chainReadLib = () => import("./lib/chainRead");
+import { bytesToHex } from "@candor/shared";
+
+// wasm-heavy modules load on demand — the landing page renders without them
+const midnightLib = () => import("./lib/midnight");
+const hashLib = () => import("@candor/shared/hash");
 
 type View = "browse" | "cut" | "contribute" | "result";
 
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "var(--bg)", color: "var(--text)", fontFamily: "Inter, sans-serif" }}>
+          <div style={{ maxWidth: 560, border: "1px solid var(--line)", borderRadius: 14, padding: 24, background: "var(--panel)" }}>
+            <h2 style={{ marginTop: 0 }}>Candor hit an unexpected error</h2>
+            <p style={{ color: "var(--muted)", lineHeight: 1.5 }}>
+              Reload the page to continue. If this keeps happening, your browser may have
+              blocked WebAssembly — which Candor needs for zero-knowledge proofs. Try
+              disabling enhanced security / tracking prevention for this site, or open it in Chrome.
+            </p>
+            <button className="btn btn-primary" onClick={() => location.reload()}>Reload</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <CandorApp />
+    </ErrorBoundary>
+  );
+}
+
+function CandorApp() {
   const [ledger, setLedger] = useState(() => loadLedger());
   const [view, setView] = useState<View>("browse");
   const [activeCutKey, setActiveCutKey] = useState<string>(() => allCuts()[0] ? cutKeyString(allCuts()[0]) : "");
   const [toast, setToast] = useState<string | null>(null);
   const [chain, setChain] = useState<{ providers: CandorProviders } | null>(null);
+  const [live, setLive] = useState<{ epoch: string; members: number; submissions: number; snapshot: LedgerSnapshot } | null>(null);
+  const contractAddress = getStoredContractAddress();
+
+  const refreshLive = async () => {
+    if (!contractAddress) return;
+    try {
+      const { readCandorState } = await chainReadLib();
+      setLive(await readCandorState(contractAddress));
+    } catch (e: any) {
+      console.warn("[candor] live read unavailable, showing sample data:", e?.message ?? e);
+      setLive(null);
+    }
+  };
+  useEffect(() => {
+    refreshLive();
+    const t = setInterval(refreshLive, 90_000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => {
+    (window as any).__candorRefreshLive = refreshLive;
+  }, []);
   useEffect(() => {
     (window as any).__candorChain = chain;
   }, [chain]);
@@ -58,7 +114,6 @@ export default function App() {
     window.addEventListener("focus", recheck);
     return () => { clearTimeout(t1); clearTimeout(t2); window.removeEventListener("focus", recheck); };
   }, []);
-  const contractAddress = getStoredContractAddress();
 
   // keep ledger in sync with storage events (demo)
   useEffect(() => {
@@ -67,6 +122,7 @@ export default function App() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  const displayLedger = live?.snapshot ?? ledger;
   const cuts = useMemo(() => allCuts(), []);
   const activeCut = useMemo(() => cuts.find((c) => cutKeyString(c) === activeCutKey) ?? cuts[0], [cuts, activeCutKey]);
 
@@ -77,6 +133,7 @@ export default function App() {
 
   const connectChain = async () => {
     try {
+      const { connectCandor } = await midnightLib();
       const providers = await connectCandor("preprod");
       setChain({ providers });
       showToast("Lace connected — Preprod");
@@ -98,7 +155,7 @@ export default function App() {
           </div>
           <div className="row">
             <span className="badge">
-              <span className="mono small">epoch</span> <strong>{ledger.epoch}</strong> · <span className="mono small">k≥{K_ANONYMITY}</span>
+              <span className="mono small">epoch</span> <strong>{displayLedger.epoch}</strong> · <span className="mono small">k≥{K_ANONYMITY}</span>
             </span>
             <button className="btn btn-ghost small" onClick={() => { resetLedger(); setLedger(loadLedger()); showToast("Sample data reset"); }}>
               Reset sample data
@@ -122,6 +179,18 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {!laceReady && !chain && (
+        <div className="container">
+          <div className="notice" style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span>
+              <strong>Welcome.</strong> Browse every unlocked distribution right now — no wallet needed.
+              To contribute on-chain, install the Lace wallet and connect.
+            </span>
+            <a className="btn small" href="https://www.lace.io/" target="_blank" rel="noreferrer">Get Lace</a>
+          </div>
+        </div>
+      )}
 
       <div className="container hero">
         <div className="hero-grid">
@@ -148,7 +217,14 @@ export default function App() {
           </div>
 
           <div className="card card-pad">
-            <div className="kicker">Network stats</div>
+            <div className="kicker" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                Network stats
+                {live ? (
+                  <span className="badge small" style={{ color: "var(--green)", borderColor: "#14301e", background: "var(--green-bg)" }}>● live on-chain</span>
+                ) : (
+                  <span className="badge small">sample data</span>
+                )}
+              </div>
             <h3 style={{ margin: "6px 0 8px" }}>Why reading is free</h3>
             <p className="small muted" style={{ lineHeight: 1.5 }}>
               Anyone can read any cut that has ≥{K_ANONYMITY} verified contributors. Locked cuts prompt you to contribute to unlock them — that’s the give-to-get loop. No wallet needed to read.
@@ -157,11 +233,11 @@ export default function App() {
             <div className="row" style={{ justifyContent: "space-between" }}>
               <div>
                 <div className="small muted">Total verified submissions</div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{Object.values(ledger.histogram).reduce((a, b) => a + b, 0)}</div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{Object.values(displayLedger.histogram).reduce((a, b) => a + b, 0)}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div className="small muted">Unlocked cuts</div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{cuts.filter((c) => isUnlocked(ledger, c)).length} / {cuts.length}</div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{cuts.filter((c) => isUnlocked(displayLedger, c)).length} / {cuts.length}</div>
               </div>
             </div>
             <div className="notice" style={{ marginTop: 12 }}>
@@ -184,7 +260,7 @@ export default function App() {
         <div className="grid">
           {cuts.map((cut) => {
             const key = cutKeyString(cut);
-            const hist = histogramForCut(ledger, cut);
+            const hist = histogramForCut(displayLedger, cut);
             const total = hist.reduce((a, b) => a + b, 0);
             const unlocked = total >= K_ANONYMITY;
             const max = Math.max(1, ...hist);
@@ -241,7 +317,7 @@ export default function App() {
       {view === "cut" && activeCut && (
         <CutDetail
           cut={activeCut}
-          ledger={ledger}
+          ledger={displayLedger}
           onContribute={() => setView("contribute")}
           onBack={() => setView("browse")}
         />
@@ -254,20 +330,21 @@ export default function App() {
           onCutChange={setActiveCutKey}
           onClose={() => setView("browse")}
           onSuccess={(cut, bucket) => {
-            // reload ledger after successful submit
+            // reload ledger + refresh live chain data after successful submit
             setLedger(loadLedger());
+            refreshLive();
             setActiveCutKey(cutKeyString(cut));
             setView("result");
             // store last result for percentile view
             (window as any).__candorLast = { cut, bucket };
           }}
-          ledger={ledger}
+          ledger={displayLedger}
         />
       )}
 
       {view === "result" && (
         <ResultView
-          ledger={loadLedger()}
+          ledger={displayLedger}
           onBack={() => setView("cut")}
           onBrowse={() => setView("browse")}
         />
@@ -412,6 +489,8 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
       const address = getStoredContractAddress();
       if (chainProps && address) {
         // REAL chain path: prove via Lace, submit on Preprod. Salary never leaves this device.
+        const { cutKeyBytes } = await hashLib();
+        const { submitOnChain } = await midnightLib();
         await submitOnChain(chainProps.providers, address, {
           cutKey: cutKeyBytes(cutKeyString(selectedCut)),
           bucket,
@@ -635,6 +714,7 @@ function OperatorPanel({
     if (!keyValid) { onToast(`issuer key invalid (${clean.length} chars) — paste 64 hex chars and Save`); return; }
     setBusy(true);
     try {
+      const { deployCandor } = await midnightLib();
       const deployed = await deployCandor(chain.providers, hexToBytes(clean));
       const addr = (deployed.deployTxData as any).public?.contractAddress;
       if (addr) { onAddress(addr); onToast(`Deployed at ${addr}`); }
@@ -651,6 +731,7 @@ function OperatorPanel({
     if (!keyValid) { onToast(`issuer key invalid (${clean.length} chars) — paste 64 hex chars and Save`); return; }
     setBusy(true);
     try {
+      const { enrollOnChain } = await midnightLib();
       await enrollOnChain(chain.providers, address, {
         memberLeaf: hexToBytes(leafHex.replace(/^0x/, "").trim()),
         issuerKey: hexToBytes(clean),
@@ -664,6 +745,7 @@ function OperatorPanel({
 
   const doEnrollMine = async () => {
     const secret = getOrCreateSecret();
+    const { memberLeaf } = await hashLib();
     setLeafHex(bytesToHex(memberLeaf(secret)));
   };
 
@@ -683,6 +765,7 @@ function OperatorPanel({
     if (!keyValid) { onToast(`issuer key invalid (${clean.length} chars) — paste 64 hex chars and Save`); return; }
     setBusy(true);
     try {
+      const { nextEpochOnChain } = await midnightLib();
       await nextEpochOnChain(chain.providers, address, { issuerKey: hexToBytes(clean) });
       onToast("Epoch advanced — members can submit again");
     } catch (e: any) { onToast(e?.message ?? "nextEpoch failed"); } finally { setBusy(false); }

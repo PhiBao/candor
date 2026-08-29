@@ -51,9 +51,6 @@ function getFirstCompatibleWallet(): InitialAPI | undefined {
   );
 }
 
-export function isLaceAvailable(): boolean {
-  return getFirstCompatibleWallet() !== undefined;
-}
 
 /** Fallback endpoints when the wallet's getConfiguration() is missing or fails. */
 const FALLBACK_URIS = {
@@ -322,20 +319,6 @@ export async function nextEpochOnChain(
   return (found.callTx as any).nextEpoch();
 }
 
-// ---- session helpers -------------------------------------------------------
+// ---- session helpers (pure versions live in ./session; re-exported for convenience)
 
-const ADDR_KEY = "candor:contractAddress";
-// Baked at build time (fly deploy build arg) so visitors land on the deployed contract
-const BAKED_ADDRESS: string = (import.meta as any).env?.VITE_CONTRACT_ADDRESS ?? "";
-
-export function getStoredContractAddress(): string | null {
-  try {
-    return localStorage.getItem(ADDR_KEY) || BAKED_ADDRESS || null;
-  } catch {
-    return BAKED_ADDRESS || null;
-  }
-}
-
-export function setStoredContractAddress(address: string): void {
-  localStorage.setItem(ADDR_KEY, address);
-}
+export { isLaceAvailable, getStoredContractAddress, setStoredContractAddress } from "./session";

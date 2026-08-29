@@ -11,6 +11,35 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Never-blank guarantee: if the app bundle fails to boot (blocked WASM,
+      // strict security modes, network hiccup), show a helpful fallback panel
+      // instead of an empty page.
+      (function () {
+        var shown = false;
+        function fallback(reason) {
+          if (shown) return;
+          shown = true;
+          var root = document.getElementById("root");
+          if (!root || root.hasChildNodes()) return;
+          root.innerHTML =
+            '<div style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#0a0a0b;color:#f5f5f4;font-family:Inter,system-ui,sans-serif">' +
+            '<div style="max-width:560px;border:1px solid #26262b;border-radius:14px;padding:24px;background:#121214">' +
+            '<h2 style="margin:0 0 10px">Candor could not fully load</h2>' +
+            '<p style="color:#a1a1aa;line-height:1.5">' + reason + '</p>' +
+            '<p style="color:#a1a1aa;line-height:1.5">Candor uses WebAssembly for zero-knowledge proofs. If your browser (or an extension / enhanced-security mode) blocks it, allow WASM for this site or open the page in Chrome.</p>' +
+            '<button onclick="location.reload()" style="background:#facc15;color:#0a0a0b;border:0;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer">Reload</button>' +
+            "</div></div>";
+        }
+        window.addEventListener("error", function (e) {
+          if (String(e.message || "").match(/wasm|WebAssembly|import/i)) fallback("A required component failed to load.");
+        });
+        setTimeout(function () {
+          var root = document.getElementById("root");
+          if (root && !root.hasChildNodes()) fallback("The application took too long to start.");
+        }, 12000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

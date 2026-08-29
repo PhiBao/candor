@@ -12,6 +12,16 @@
 		}
 	}
 
+	handle /indexer/* {
+		uri strip_prefix /indexer
+		reverse_proxy {$INDEXER_URL} {
+			transport http {
+				tls
+				tls_server_name {$INDEXER_HOST}
+			}
+		}
+	}
+
 	handle_path /proof-server/* {
 		reverse_proxy {$PROOF_SERVER_URL} {
 			transport http {

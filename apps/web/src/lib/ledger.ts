@@ -9,7 +9,6 @@ import {
   emptyHistogram,
 } from "@candor/shared";
 import { bytesToHex } from "@candor/shared";
-import { memberLeaf } from "@candor/shared/hash";
 
 export type LedgerSnapshot = {
   members: string[]; // hex leaf 0x...
@@ -43,7 +42,9 @@ export function getSecretHex(): string | null {
 }
 
 // Canonical leaf — identical to the circuit's derivation (hash-parity tested).
-export function leafForSecret(secret: Uint8Array): string {
+// The hashing runtime (wasm) is loaded on demand so the landing page stays light.
+export async function leafForSecret(secret: Uint8Array): Promise<string> {
+  const { memberLeaf } = await import("@candor/shared/hash");
   return "0x" + bytesToHex(memberLeaf(secret));
 }
 
