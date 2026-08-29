@@ -122,29 +122,8 @@ function CandorApp() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  // Merge live on-chain histogram with local pending contributions so the UI
-  // reflects your submit immediately even when the prover is temporarily down
-  // and the contribution fell back to the demo ledger. Live data wins, but
-  // local-only buckets are overlaid optimistically.
-  const displayLedger = useMemo(() => {
-    if (!live?.snapshot) return ledger;
-    const mergedHist: Record<string, number> = { ...live.snapshot.histogram };
-    let merged = false;
-    for (const k of Object.keys(ledger.histogram)) {
-      // Only overlay buckets that live doesn't already have — these are
-      // demo-seeded or pending local contributions not yet indexed.
-      if (!(k in mergedHist)) {
-        mergedHist[k] = ledger.histogram[k];
-        merged = true;
-      } else if (live.snapshot.histogram[k] === 0 && ledger.histogram[k] > 0) {
-        // Live says 0 but we have a local contribution — show it
-        mergedHist[k] = ledger.histogram[k];
-        merged = true;
-      }
-    }
-    if (!merged && Object.keys(mergedHist).length === Object.keys(live.snapshot.histogram).length) return live.snapshot;
-    return { ...live.snapshot, histogram: mergedHist };
-  }, [live, ledger]);
+  const displayLedger = live?.snapshot ?? ledger;
+  const [demoFallback, setDemoFallback] = useState(false);
   const cuts = useMemo(() => allCuts(), []);
   const activeCut = useMemo(() => cuts.find((c) => cutKeyString(c) === activeCutKey) ?? cuts[0], [cuts, activeCutKey]);
 
@@ -215,6 +194,15 @@ function CandorApp() {
           </div>
         </div>
       </header>
+
+      {demoFallback && (
+        <div className="container">
+          <div className="notice" style={{ marginTop: 14, borderColor: "#854d0e", background: "#1a1500" }}>
+            <strong>Demo mode:</strong> hosted prover temporarily unavailable — your last contribution was recorded locally and is <em>not</em> on-chain.{" "}
+            <span className="small">Refresh or run locally (<span className="mono">pnpm dev:all</span>) for the full on-device privacy guarantee.</span>
+          </div>
+        </div>
+      )}
 
       {!laceReady && !chain && (
         <div className="container">
@@ -374,6 +362,7 @@ function CandorApp() {
             // store last result for percentile view
             (window as any).__candorLast = { cut, bucket };
           }}
+          onDemoFallback={setDemoFallback}
           ledger={displayLedger}
         />
       )}
@@ -498,7 +487,7 @@ function CutDetail({ cut, ledger, onContribute, onBack }: { cut: any; ledger: an
   );
 }
 
-function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }: { cut: any; cuts: any[]; onCutChange: (k: string) => void; onClose: () => void; onSuccess: (cut: any, bucket: number) => void; ledger: any }) {
+function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, onDemoFallback, ledger }: { cut: any; cuts: any[]; onCutChange: (k: string) => void; onClose: () => void; onSuccess: (cut: any, bucket: number) => void; onDemoFallback?: (active: boolean) => void; ledger: any }) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -594,16 +583,17 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
         } catch (e: any) {
           const msg = String(e?.message ?? e);
           const isProverDown = /403|Failed to fetch|Load failed|proof-server|prove/i.test(msg);
-          // If either the prover is down or the membership hasn't propagated yet,
-          // fall back to a local demo contribution so the user still gets the moment.
-          // The real on-chain data will be visible after the next successful submit.
-          if (isProverDown || /not a member/i.test(msg)) {
-            console.warn("[candor] chain submit unavailable, falling back to demo ledger:", msg.slice(0, 300));
+          if (isProverDown) {
+            console.warn("[candor] hosted prover unavailable, entering demo mode:", msg.slice(0, 300));
+            onDemoFallback?.(true);
             await new Promise((r) => setTimeout(r, 900));
             const res = await submitLocal(snap, secret, selectedCut, bucket);
             if (!res.ok) throw new Error(res.reason);
             onSuccess(selectedCut, bucket);
             return;
+          }
+          if (/not a member/i.test(msg)) {
+            throw new Error("Enrollment is still pending — the on-chain enroll may still be confirming. Please wait ~10s and try again, or use the Operator panel to enroll this leaf.");
           }
           if (/email not verified/i.test(msg)) {
             throw new Error("Email not verified on the issuer — please restart verification from step 1.");
@@ -611,6 +601,7 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
           throw e;
         }
         if (chainSucceeded) {
+          onDemoFallback?.(false);
           // Refresh live data after a real submit so the next browse shows the new state
           try { await (window as any).__candorRefreshLive?.(); } catch {}
         }

@@ -105,11 +105,11 @@ Deploy your own instance: `fly deploy -c fly.issuer.toml` then `fly deploy -c fl
 
 | Piece | State |
 |---|---|
-| Compact contract (`candor.compact`, 0.31.1 / lang 0.23) | **Compiled** — circuits `submit`, `enroll`, `getHistogram`; proving keys in `src/managed/candor/` |
+| Compact contract (`candor.compact`, 0.31.1 / lang 0.23) | **Compiled** — 5 circuits `submit`, `enroll`, `nextEpoch`, `getHistogram`, `readEpoch`; proving keys in `src/managed/candor/` |
 | Off-chain circuit + invariant tests | **Passing** (happy path, double-submit, non-member, bad bucket, histogram-not-sum leak regression) |
 | Web app, mock ledger mode | **Working** — full browse → verify → contribute → percentile flow, no chain needed (`pnpm dev`) |
-| Issuer service | **Demo mode** — verification codes returned in-band, no email infra, does not call `enroll` on-chain yet |
-| Browser chain path (Lace + Midnight.js 4.1.1) | ✅ **End-to-end verified on Preprod** — deploy, enroll, submit all executed with real transactions; proofs generated on-device |
+| Issuer service | **Live** — verification codes via issuer (`/issuer/*`); verified leaves auto-enrolled on-chain via baked issuer key (seamless); manual Operator panel also available. Email infra mock in Wave 1 |
+| Browser chain path (Lace + Midnight.js 4.1.1) | ✅ **End-to-end verified on Preprod** — deploy, enroll, submit all executed with real transactions. Hosted prover has explicit demo-mode fallback (never silently merges mock into live histogram) |
 | CLI deploy (`deploy.ts`) | Stub — the browser Operator console is the Wave 1 deployment path |
 | Demo video / pitch deck | **Not yet** — planned before the Sep 16 deadline |
 
