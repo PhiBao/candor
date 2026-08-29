@@ -52,12 +52,21 @@ app.post("/verify/confirm", (req, res) => {
 app.post("/enroll", (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const leafHex = String(req.body?.leafHex ?? "").trim().toLowerCase();
-  if (!verifiedEmails.has(email)) return res.status(403).json({ error: "email not verified" });
   if (!/^0x[0-9a-f]{64}$/.test(leafHex)) return res.status(400).json({ error: "invalid leafHex" });
-  if (leaves.has(leafHex)) return res.status(409).json({ error: "already enrolled" });
-  // Per-epoch rate limit: one leaf per email per epoch (Wave 1 epoch is static, so one ever)
+  // Idempotent: if leaf already exists, return success regardless of verified state
+  // (handles Fly restarts where verifiedEmails is cleared but leaf is still on-chain)
+  if (leaves.has(leafHex)) return res.json({ ok: true, leafHex, already: true });
   const existingForEmail = leafLog.find((e) => e.email === email);
-  if (existingForEmail) return res.status(409).json({ error: "email already has a leaf this epoch" });
+  if (existingForEmail) {
+    if (existingForEmail.leafHex.toLowerCase() === leafHex.toLowerCase()) return res.json({ ok: true, leafHex, already: true });
+    return res.status(409).json({ error: "email already has a leaf this epoch" });
+  }
+  if (!verifiedEmails.has(email)) {
+    // In Wave 1 demo, also check mock fallback — if client already verified via sessionStorage
+    // but server restarted, allow it if they provide a valid verified leaf.
+    // For now, keep strict but allow already-known leaves above. New leaves require verification.
+    return res.status(403).json({ error: "email not verified" });
+  }
 
   leaves.add(leafHex);
   leafLog.push({ email, leafHex, at: new Date().toISOString() });

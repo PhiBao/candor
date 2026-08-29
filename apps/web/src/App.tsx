@@ -138,8 +138,22 @@ function CandorApp() {
       setChain({ providers });
       showToast("Lace connected — Preprod");
     } catch (e: any) {
-      showToast(e?.message ?? "Lace connection failed");
+      const msg = String(e?.message ?? e).toLowerCase();
+      if (msg.includes("unlock") || msg.includes("locked")) {
+        showToast("Lace is locked — click the Lace icon to unlock, then try again");
+      } else if (msg.includes("rejected") || msg.includes("denied") || msg.includes("cancel")) {
+        showToast("Connection was cancelled");
+      } else {
+        showToast(e?.message ?? "Lace connection failed");
+      }
     }
+  };
+
+  const [showGate, setShowGate] = useState(false);
+  const requireWallet = (next: () => void) => {
+    if (chain) { next(); return; }
+    if (laceReady) { setShowGate(true); return; }
+    setShowGate(true);
   };
 
   return (
@@ -175,7 +189,7 @@ function CandorApp() {
             {chain && (
               <button className="btn btn-ghost small" onClick={() => setOperatorOpen(true)} title="Deploy / enroll / epoch">Operator</button>
             )}
-            <button className="btn btn-primary small" onClick={() => setView("contribute")}>Contribute</button>
+            <button className="btn btn-primary small" onClick={() => requireWallet(() => setView("contribute"))}>Contribute</button>
           </div>
         </div>
       </header>
@@ -208,7 +222,7 @@ function CandorApp() {
               <span className="pill"><b>Aggregate-only</b> · histogram buckets, not raw values</span>
             </div>
             <div className="row" style={{ marginTop: 14 }}>
-              <button className="btn btn-primary" onClick={() => setView("contribute")}>Contribute anonymously</button>
+              <button className="btn btn-primary" onClick={() => requireWallet(() => setView("contribute"))}>Contribute anonymously</button>
               <button className="btn" onClick={() => document.getElementById("cuts")?.scrollIntoView({ behavior: "smooth" })}>Browse cuts</button>
             </div>
             <div className="notice" style={{ marginTop: 14 }}>
@@ -297,7 +311,7 @@ function CandorApp() {
                     <div style={{ fontSize: 22 }}>🔒</div>
                     <div className="small"><strong>Locked</strong> · needs {K_ANONYMITY - total} more verified contributors</div>
                     <div className="small muted" style={{ marginTop: 4 }}>Contribute to unlock this cut for everyone.</div>
-                    <button className="btn btn-primary small" style={{ marginTop: 8 }} onClick={(e) => { e.stopPropagation(); setActiveCutKey(key); setView("contribute"); }}>
+                    <button className="btn btn-primary small" style={{ marginTop: 8 }} onClick={(e) => { e.stopPropagation(); setActiveCutKey(key); requireWallet(() => setView("contribute")); }}>
                       Unlock by contributing
                     </button>
                   </div>
@@ -364,6 +378,33 @@ function CandorApp() {
       {toast && (
         <div style={{ position: "fixed", bottom: 18, left: "50%", transform: "translateX(-50%)", background: "#1f1f23", border: "1px solid var(--line2)", padding: "10px 14px", borderRadius: 999, boxShadow: "var(--shadow)", zIndex: 50 }}>
           {toast}
+        </div>
+      )}
+
+      {showGate && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", backdropFilter: "blur(8px)", zIndex: 45, display: "grid", placeItems: "center", padding: 18 }}>
+          <div className="card" style={{ maxWidth: 520 }}>
+            <div className="card-pad" style={{ textAlign: "center" }}>
+              <h2 style={{ margin: "6px 0 8px" }}>Connect your wallet to contribute</h2>
+              <p className="small muted" style={{ lineHeight: 1.5 }}>
+                Candor verifies you before you submit — one verified person, one contribution per epoch. Your salary proof is generated on your device.
+              </p>
+              {laceReady ? (
+                <div className="row" style={{ justifyContent: "center", marginTop: 14 }}>
+                  <button className="btn btn-primary" onClick={async () => { setShowGate(false); await connectChain(); if ((window as any).__candorChain) setView("contribute"); }}>Connect Lace</button>
+                  <button className="btn" onClick={() => setShowGate(false)}>Not now</button>
+                </div>
+              ) : (
+                <>
+                  <p className="small muted">Lace wallet not detected. Install it, then reload.</p>
+                  <div className="row" style={{ justifyContent: "center", marginTop: 14 }}>
+                    <a className="btn btn-primary" href="https://www.lace.io/" target="_blank" rel="noreferrer">Install Lace</a>
+                    <button className="btn" onClick={() => setShowGate(false)}>Browse anyway</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -493,20 +534,32 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
         const { submitOnChain, enrollOnChain } = await midnightLib();
         const issuerKey = getEffectiveIssuerKey();
         // Auto-enroll on-chain if not yet a member — makes the verified flow seamless.
+        // This is what "enroll leaf first" means: one verified email = one on-chain leaf.
+        // The demo script's verification step *is* the enroll step behind the scenes.
         if (issuerKey) {
           try {
+            setErr("Enrolling your membership on-chain — please approve in Lace…");
             await enrollOnChain(chainProps.providers, address, {
               memberLeaf: hexToBytes(leafHex.replace(/^0x/, "").trim()),
               issuerKey: hexToBytes(issuerKey),
             });
+            setErr(null);
+            // Brief pause for the transaction to be indexed before the membership check in submit
+            await new Promise((r) => setTimeout(r, 3500));
           } catch (e: any) {
             const msg = String(e?.message ?? e);
-            if (!/already/i.test(msg)) {
-              // Hosted prover can 403 on the enroll proof — still try submit, the demo will
-              // fall back to a friendly message if it also fails. Don't block the flow here.
+            if (/already/i.test(msg)) {
+              // Already a member — that's success, proceed silently
+            } else if (/unlock|locked/i.test(msg)) {
+              throw new Error("Lace is locked — click the Lace icon to unlock, then try Submit again.");
+            } else {
               console.warn("[candor] auto-enroll skipped:", msg.slice(0, 300));
+              // Hosted prover 403 or other transient — still try submit; the submit's
+              // fallback will handle it and show a friendly message.
             }
           }
+        } else {
+          console.warn("[candor] no issuer key available — skipping on-chain enroll, will try submit anyway");
         }
         try {
           await submitOnChain(chainProps.providers, address, {
