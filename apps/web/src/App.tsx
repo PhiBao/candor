@@ -122,7 +122,29 @@ function CandorApp() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const displayLedger = live?.snapshot ?? ledger;
+  // Merge live on-chain histogram with local pending contributions so the UI
+  // reflects your submit immediately even when the prover is temporarily down
+  // and the contribution fell back to the demo ledger. Live data wins, but
+  // local-only buckets are overlaid optimistically.
+  const displayLedger = useMemo(() => {
+    if (!live?.snapshot) return ledger;
+    const mergedHist: Record<string, number> = { ...live.snapshot.histogram };
+    let merged = false;
+    for (const k of Object.keys(ledger.histogram)) {
+      // Only overlay buckets that live doesn't already have — these are
+      // demo-seeded or pending local contributions not yet indexed.
+      if (!(k in mergedHist)) {
+        mergedHist[k] = ledger.histogram[k];
+        merged = true;
+      } else if (live.snapshot.histogram[k] === 0 && ledger.histogram[k] > 0) {
+        // Live says 0 but we have a local contribution — show it
+        mergedHist[k] = ledger.histogram[k];
+        merged = true;
+      }
+    }
+    if (!merged && Object.keys(mergedHist).length === Object.keys(live.snapshot.histogram).length) return live.snapshot;
+    return { ...live.snapshot, histogram: mergedHist };
+  }, [live, ledger]);
   const cuts = useMemo(() => allCuts(), []);
   const activeCut = useMemo(() => cuts.find((c) => cutKeyString(c) === activeCutKey) ?? cuts[0], [cuts, activeCutKey]);
 

@@ -1,0 +1,16 @@
+app = "candor-midnight-prover"
+primary_region = "iad"
+
+[build]
+  image = "midnightntwrk/proof-server:8.1.0"
+
+[http_service]
+  internal_port = 6300
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1024mb"
