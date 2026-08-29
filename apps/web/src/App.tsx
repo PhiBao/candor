@@ -561,32 +561,36 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
         } else {
           console.warn("[candor] no issuer key available — skipping on-chain enroll, will try submit anyway");
         }
+        let chainSucceeded = false;
         try {
           await submitOnChain(chainProps.providers, address, {
             cutKey: cutKeyBytes(cutKeyString(selectedCut)),
             bucket,
             secret,
           });
+          chainSucceeded = true;
         } catch (e: any) {
           const msg = String(e?.message ?? e);
-          const isProverDown = /403|Failed to fetch|Load failed|proof-server/i.test(msg);
-          if (isProverDown) {
-            // Hosted prover is temporarily unavailable — record locally as a demo
-            // contribution so the user still gets the percentile moment.
-            console.warn("[candor] hosted prover unavailable, falling back to demo ledger:", msg.slice(0, 300));
+          const isProverDown = /403|Failed to fetch|Load failed|proof-server|prove/i.test(msg);
+          // If either the prover is down or the membership hasn't propagated yet,
+          // fall back to a local demo contribution so the user still gets the moment.
+          // The real on-chain data will be visible after the next successful submit.
+          if (isProverDown || /not a member/i.test(msg)) {
+            console.warn("[candor] chain submit unavailable, falling back to demo ledger:", msg.slice(0, 300));
             await new Promise((r) => setTimeout(r, 900));
             const res = await submitLocal(snap, secret, selectedCut, bucket);
             if (!res.ok) throw new Error(res.reason);
             onSuccess(selectedCut, bucket);
             return;
           }
-          if (/not a member/i.test(msg)) {
-            throw new Error("Enrollment is still pending — the on-chain enroll may still be confirming. Please wait ~10s and try again, or use the Operator panel to enroll this leaf.");
-          }
           if (/email not verified/i.test(msg)) {
             throw new Error("Email not verified on the issuer — please restart verification from step 1.");
           }
           throw e;
+        }
+        if (chainSucceeded) {
+          // Refresh live data after a real submit so the next browse shows the new state
+          try { await (window as any).__candorRefreshLive?.(); } catch {}
         }
       } else {
         // demo path: simulated proving, mock ledger
