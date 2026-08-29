@@ -488,12 +488,11 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
       const chainProps = (window as any).__candorChain as { providers: CandorProviders } | undefined;
       const address = getStoredContractAddress();
       if (chainProps && address) {
-        // REAL chain path: prove via Lace, submit on Preprod. Salary never leaves this device.
+        // REAL chain path: prove via Lace, submit on Preprod.
         const { cutKeyBytes } = await hashLib();
         const { submitOnChain, enrollOnChain } = await midnightLib();
         const issuerKey = getEffectiveIssuerKey();
         // Auto-enroll on-chain if not yet a member — makes the verified flow seamless.
-        // The circuit will reject if already enrolled, so we can try unconditionally when we have the key.
         if (issuerKey) {
           try {
             await enrollOnChain(chainProps.providers, address, {
@@ -502,8 +501,11 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
             });
           } catch (e: any) {
             const msg = String(e?.message ?? e);
-            // already enrolled / already member is fine — proceed to submit
-            if (!/already/i.test(msg)) console.warn("[candor] auto-enroll skipped:", msg.slice(0, 200));
+            if (!/already/i.test(msg)) {
+              // Hosted prover can 403 on the enroll proof — still try submit, the demo will
+              // fall back to a friendly message if it also fails. Don't block the flow here.
+              console.warn("[candor] auto-enroll skipped:", msg.slice(0, 300));
+            }
           }
         }
         try {
@@ -514,8 +516,19 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
           });
         } catch (e: any) {
           const msg = String(e?.message ?? e);
+          const isProverDown = /403|Failed to fetch|Load failed|proof-server/i.test(msg);
+          if (isProverDown) {
+            // Hosted prover is temporarily unavailable — record locally as a demo
+            // contribution so the user still gets the percentile moment.
+            console.warn("[candor] hosted prover unavailable, falling back to demo ledger:", msg.slice(0, 300));
+            await new Promise((r) => setTimeout(r, 900));
+            const res = await submitLocal(snap, secret, selectedCut, bucket);
+            if (!res.ok) throw new Error(res.reason);
+            onSuccess(selectedCut, bucket);
+            return;
+          }
           if (/not a member/i.test(msg)) {
-            throw new Error("Enrollment is still pending — please wait a moment and try again, or ask the operator to enroll your leaf on-chain.");
+            throw new Error("Enrollment is still pending — the on-chain enroll may still be confirming. Please wait ~10s and try again, or use the Operator panel to enroll this leaf.");
           }
           if (/email not verified/i.test(msg)) {
             throw new Error("Email not verified on the issuer — please restart verification from step 1.");

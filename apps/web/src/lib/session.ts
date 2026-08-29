@@ -28,6 +28,12 @@ export function isLaceAvailable(): boolean {
 function readStorage(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
 }
+function safeSessionGet(key: string): string | null {
+  try { return sessionStorage.getItem(key); } catch { return null; }
+}
+function safeSessionSet(key: string, val: string) {
+  try { sessionStorage.setItem(key, val); } catch {}
+}
 
 export function getStoredContractAddress(): string | null {
   return readStorage(ADDR_KEY) || BAKED_ADDRESS || null;
