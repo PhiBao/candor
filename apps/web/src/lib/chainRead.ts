@@ -39,6 +39,16 @@ export async function readCandorState(contractAddress: string): Promise<{
 
   const epoch = led.epochCount.lookup(new Uint8Array([101]));
   const histogram: Record<string, number> = {};
+  // Populate histogram for all Wave 1 cuts so public pages are live
+  const { allCuts } = await import("@candor/shared");
+  for (const cut of allCuts()) {
+    const ck = cutKeyBytes(cutKeyString(cut));
+    for (let b = 0; b < BUCKET_COUNT; b++) {
+      let v = 0;
+      try { v = Number(led.histogram.lookup(bucketKeyBytes(ck, BigInt(b)))); } catch { v = 0; }
+      if (v > 0) histogram[`${cutKeyString(cut)}:b${b}`] = v;
+    }
+  }
   const members = Number(led.members.size());
   const submissions = Number(led.nullifiers.size());
 
