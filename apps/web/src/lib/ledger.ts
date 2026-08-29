@@ -23,22 +23,28 @@ const LS_CONTRIBUTIONS = "candor:contribs:v1"; // local record of my submissions
 
 // ---- Secret ----
 
+function safeGet(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }
+function safeSet(k: string, v: string) { try { localStorage.setItem(k, v); } catch {} }
+function safeRemove(k: string) { try { localStorage.removeItem(k); } catch {} }
+
 export function getOrCreateSecret(): Uint8Array {
-  const existing = localStorage.getItem(LS_SECRET);
+  const existing = safeGet(LS_SECRET);
   if (existing) {
-    const hex = existing.replace(/^0x/, "");
-    const out = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-    if (out.length === 32) return out;
+    try {
+      const hex = existing.replace(/^0x/, "");
+      const out = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+      if (out.length === 32) return out;
+    } catch {}
   }
   const s = new Uint8Array(32);
   crypto.getRandomValues(s);
-  localStorage.setItem(LS_SECRET, "0x" + bytesToHex(s));
+  safeSet(LS_SECRET, "0x" + bytesToHex(s));
   return s;
 }
 
 export function getSecretHex(): string | null {
-  return localStorage.getItem(LS_SECRET);
+  return safeGet(LS_SECRET);
 }
 
 // Canonical leaf — identical to the circuit's derivation (hash-parity tested).
@@ -60,7 +66,7 @@ export async function nullifierForSecret(secret: Uint8Array): Promise<string> {
 // ---- Ledger ----
 
 export function loadLedger(): LedgerSnapshot {
-  const raw = localStorage.getItem(LS_LEDGER);
+  const raw = safeGet(LS_LEDGER);
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as LedgerSnapshot;
@@ -72,12 +78,12 @@ export function loadLedger(): LedgerSnapshot {
 }
 
 export function saveLedger(s: LedgerSnapshot) {
-  localStorage.setItem(LS_LEDGER, JSON.stringify(s));
+  safeSet(LS_LEDGER, JSON.stringify(s));
 }
 
 export function resetLedger() {
-  localStorage.removeItem(LS_LEDGER);
-  localStorage.removeItem(LS_CONTRIBUTIONS);
+  safeRemove(LS_LEDGER);
+  safeRemove(LS_CONTRIBUTIONS);
 }
 
 function seedLedger(): LedgerSnapshot {
@@ -107,7 +113,7 @@ function seedLedger(): LedgerSnapshot {
 export type MyContribution = { cut: Cut; bucket: number; at: string };
 
 export function loadMyContribs(): MyContribution[] {
-  const raw = localStorage.getItem(LS_CONTRIBUTIONS);
+  const raw = safeGet(LS_CONTRIBUTIONS);
   if (!raw) return [];
   try {
     return JSON.parse(raw) as MyContribution[];
@@ -119,7 +125,7 @@ export function loadMyContribs(): MyContribution[] {
 export function saveMyContrib(c: MyContribution) {
   const cur = loadMyContribs();
   cur.push(c);
-  localStorage.setItem(LS_CONTRIBUTIONS, JSON.stringify(cur));
+  safeSet(LS_CONTRIBUTIONS, JSON.stringify(cur));
 }
 
 export function histogramForCut(snap: LedgerSnapshot, cut: Cut): Histogram {

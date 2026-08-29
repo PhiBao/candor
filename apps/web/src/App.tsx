@@ -25,7 +25,7 @@ import {
 } from "./lib/ledger";
 import { requestCode, confirmCode, enrollLeaf } from "./lib/issuer";
 import type { CandorProviders } from "./lib/midnight";
-import { isLaceAvailable, getStoredContractAddress, setStoredContractAddress } from "./lib/session";
+import { isLaceAvailable, getStoredContractAddress, setStoredContractAddress, getEffectiveIssuerKey, getBakedIssuerKey } from "./lib/session";
 import type { LedgerSnapshot } from "./lib/ledger";
 
 // live on-chain reads (lazy — wasm loads on demand)
@@ -490,12 +490,38 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, ledger }
       if (chainProps && address) {
         // REAL chain path: prove via Lace, submit on Preprod. Salary never leaves this device.
         const { cutKeyBytes } = await hashLib();
-        const { submitOnChain } = await midnightLib();
-        await submitOnChain(chainProps.providers, address, {
-          cutKey: cutKeyBytes(cutKeyString(selectedCut)),
-          bucket,
-          secret,
-        });
+        const { submitOnChain, enrollOnChain } = await midnightLib();
+        const issuerKey = getEffectiveIssuerKey();
+        // Auto-enroll on-chain if not yet a member — makes the verified flow seamless.
+        // The circuit will reject if already enrolled, so we can try unconditionally when we have the key.
+        if (issuerKey) {
+          try {
+            await enrollOnChain(chainProps.providers, address, {
+              memberLeaf: hexToBytes(leafHex.replace(/^0x/, "").trim()),
+              issuerKey: hexToBytes(issuerKey),
+            });
+          } catch (e: any) {
+            const msg = String(e?.message ?? e);
+            // already enrolled / already member is fine — proceed to submit
+            if (!/already/i.test(msg)) console.warn("[candor] auto-enroll skipped:", msg.slice(0, 200));
+          }
+        }
+        try {
+          await submitOnChain(chainProps.providers, address, {
+            cutKey: cutKeyBytes(cutKeyString(selectedCut)),
+            bucket,
+            secret,
+          });
+        } catch (e: any) {
+          const msg = String(e?.message ?? e);
+          if (/not a member/i.test(msg)) {
+            throw new Error("Enrollment is still pending — please wait a moment and try again, or ask the operator to enroll your leaf on-chain.");
+          }
+          if (/email not verified/i.test(msg)) {
+            throw new Error("Email not verified on the issuer — please restart verification from step 1.");
+          }
+          throw e;
+        }
       } else {
         // demo path: simulated proving, mock ledger
         await new Promise((r) => setTimeout(r, 900));
@@ -693,13 +719,21 @@ function OperatorPanel({
   onAddress: (addr: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [issuerKeyHex, setIssuerKeyHex] = useState<string>(() => localStorage.getItem("candor:issuerKey") ?? "");
+  const [issuerKeyHex, setIssuerKeyHex] = useState<string>(() => {
+    try { return localStorage.getItem("candor:issuerKey") ?? getBakedIssuerKey() ?? ""; } catch { return getBakedIssuerKey() ?? ""; }
+  });
   const [leafHex, setLeafHex] = useState<string>("");
   const [enrollEmail, setEnrollEmail] = useState<string>("");
   const address = getStoredContractAddress();
-  const storedKey = localStorage.getItem("candor:issuerKey") ?? "";
-  const effectiveKey = (issuerKeyHex || storedKey).replace(/^0x/, "").trim();
+  const effectiveKey = getEffectiveIssuerKey() ?? issuerKeyHex.replace(/^0x/, "").trim();
   const keyValid = /^[0-9a-fA-F]{64}$/.test(effectiveKey);
+  // Auto-save baked key on first load so the operator never has to paste
+  useEffect(() => {
+    const baked = getBakedIssuerKey();
+    if (baked && !localStorage.getItem("candor:issuerKey")) {
+      try { localStorage.setItem("candor:issuerKey", baked); if (!issuerKeyHex) setIssuerKeyHex(baked); } catch {}
+    }
+  }, []);
 
   const saveIssuerKey = () => {
     const clean = issuerKeyHex.replace(/^0x/, "").trim();
