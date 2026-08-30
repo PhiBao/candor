@@ -55,3 +55,4 @@ coverage/
 apps/web/vite.config.js
 packages/shared/src/hash.js
 apps/web/src/lib/*.js
+AKINDO_SUBMISSION_DRAFT.md
