@@ -40,6 +40,15 @@ contributors, and future team members.
 - **Suppression is enforced on both sides of every comparison.** Publishing one side of a
   pay gap reveals the other by subtraction, so a one-sided row is a disclosure just as much
   as a small cell.
+- **Shipped the compliance surface.** A report page and a public verification page, both
+  reading live on-chain state. Every report carries a fingerprint over the exact bucket counts it
+  was built from, and anyone can paste that fingerprint into the verify page to check the report
+  against the chain — no wallet, no account. Neither page substitutes sample data for a failed
+  read; they say so instead. On the current chain (2 submissions, 1 per group) the report
+  correctly publishes nothing and states that nothing is publishable.
+- **14 tests on the report data layer**, including that a fingerprint is order-independent, that
+  it changes when any published count changes, and that the report can never emit a comparison
+  the ledger does not support.
 - **A pre-submission gate** (`pnpm check:submission`) that fails on empty or headings-only
   sections, a jargon tagline, too few tags, and missing links or community fields. It
   reports 21 errors against the real Wave 1 submission.

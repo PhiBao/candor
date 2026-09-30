@@ -141,6 +141,7 @@ Deploy your own instance: `fly deploy -c fly.issuer.toml` then `fly deploy -c fl
 | Compact contract (0.31.1 / lang 0.23) | **Live on Preprod** — 5 circuits `submit`, `enroll`, `nextEpoch`, `getHistogram`, `readEpoch` |
 | Off-chain circuit tests | **13 passing** against the generated contract (happy path, double-submit, non-member, bad bucket, histogram-not-sum leak) |
 | Report engine (`paygap.ts`) | **38 tests passing** — Art. 9 statistics, interval arithmetic, two-sided suppression |
+| Report + verification pages | **Live** — reads real chain state, publishes a fingerprint, and a third party can verify it with no wallet |
 | Issuer service | **Works** — codes in-band, `POST /enroll` idempotent; email infra mock in Wave 1 |
 | Browser chain path (Lace + Midnight.js 4.1.1) | **End-to-end verified on Preprod** with real transactions |
 | Compliance report UI | **Wave 2** — engine done, not yet wired into the app |

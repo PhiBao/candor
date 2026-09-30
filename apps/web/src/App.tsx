@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   BUCKETS,
   K_ANONYMITY,
@@ -36,7 +36,12 @@ import { bytesToHex } from "@gotit/shared";
 const midnightLib = () => import("./lib/midnight");
 const hashLib = () => import("@gotit/shared/hash");
 
-type View = "browse" | "cut" | "contribute" | "result";
+// Wave 2 compliance surfaces. reportRead also pulls in wasm (the generated
+// ledger decoder), so it stays lazy for the same reason.
+const ReportPage = lazy(() => import("./views/ReportPage"));
+const VerifyPage = lazy(() => import("./views/VerifyPage"));
+
+type View = "browse" | "cut" | "contribute" | "result" | "report" | "verify";
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -190,6 +195,12 @@ function GotItApp() {
             {chain && (
               <button className="btn btn-ghost small" onClick={() => setOperatorOpen(true)} title="Deploy / enroll / epoch">Operator</button>
             )}
+            <button className="btn btn-ghost small" onClick={() => setView("report")} title="Art. 9 pay gap report, built from live chain state">
+              Report
+            </button>
+            <button className="btn btn-ghost small" onClick={() => setView("verify")} title="Check a published report against chain state">
+              Verify
+            </button>
             <button className="btn btn-primary small" onClick={() => requireWallet(() => setView("contribute"))}>Contribute</button>
           </div>
         </div>
@@ -373,6 +384,17 @@ function GotItApp() {
           onBack={() => setView("cut")}
           onBrowse={() => setView("browse")}
         />
+      )}
+
+      {view === "report" && (
+        <Suspense fallback={<div className="container" style={{ padding: "40px 20px" }}><div className="muted">Loading report…</div></div>}>
+          <ReportPage />
+        </Suspense>
+      )}
+      {view === "verify" && (
+        <Suspense fallback={<div className="container" style={{ padding: "40px 20px" }}><div className="muted">Loading…</div></div>}>
+          <VerifyPage />
+        </Suspense>
       )}
 
       <footer className="container footer">
