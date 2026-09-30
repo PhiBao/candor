@@ -4,10 +4,10 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/issuer/package.json packages/issuer/
-RUN pnpm install --frozen-lockfile --filter @candor/issuer
+RUN pnpm install --frozen-lockfile --filter @gotit/issuer
 
 COPY packages/issuer ./packages/issuer
-RUN pnpm --filter @candor/issuer build
+RUN pnpm --filter @gotit/issuer build
 
 WORKDIR /app/packages/issuer
 ENV NODE_ENV=production

@@ -12,8 +12,10 @@ primary_region = "iad"
 [env]
   ISSUER_URL = "https://candor-midnight-issuer.fly.dev"
   ISSUER_HOST = "candor-midnight-issuer.fly.dev"
-  INDEXER_URL = "https://blockfrost.lw.iog.io"
-  INDEXER_HOST = "blockfrost.lw.iog.io"
+  # Official Preprod indexer, API v4. The previous upstream
+  # (blockfrost.lw.iog.io) now returns 410 Gone for Midnight endpoints.
+  INDEXER_URL = "https://indexer.preprod.midnight.network"
+  INDEXER_HOST = "indexer.preprod.midnight.network"
   PROOF_SERVER_URL = "https://candor-midnight-prover.fly.dev"
   PROOF_SERVER_HOST = "candor-midnight-prover.fly.dev"
 

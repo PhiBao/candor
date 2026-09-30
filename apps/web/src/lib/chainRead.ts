@@ -11,11 +11,19 @@ import { bucketKeyBytes, cutKeyBytes } from "@gotit/shared/hash";
 import { BUCKET_COUNT, type Cut, cutKeyString } from "@gotit/shared";
 import type { LedgerSnapshot } from "./ledger";
 
-// Same-origin proxy (Caddy on Fly, Vite in dev) — the indexer sends no CORS
-// headers, so direct browser reads are blocked.
+// The Preprod indexer's v4 GraphQL endpoint.
+//
+// We proxy it through our own origin (Caddy on Fly, Vite in dev) rather than
+// calling it directly, for two reasons: the WebSocket subscription cannot be
+// proxied transparently by every host, and keeping the indexer behind our own
+// origin means a change of indexer host does not need a rebuild.
+//
+// The previous upstream, blockfrost.lw.iog.io/midnight-preprod, now answers
+// 410 Gone ("Midnight endpoints have been removed from this proxy"). The
+// official host is indexer.preprod.midnight.network, API v4.
 const ORIGIN = window.location.origin;
-const INDEXER_HTTP = `${ORIGIN}/indexer/midnight-preprod/`;
-const INDEXER_WS = `${ORIGIN.replace(/^http/, "ws")}/indexer/midnight-preprod/ws`;
+const INDEXER_HTTP = `${ORIGIN}/indexer/api/v4/graphql`;
+const INDEXER_WS = `${ORIGIN.replace(/^http/, "ws")}/indexer/api/v4/graphql/ws`;
 
 const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
 

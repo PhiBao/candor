@@ -10,6 +10,19 @@ contributors, and future team members.
 
 ## Wave 2 · v0.4.0 — A new name, a new buyer, a real deliverable (2026-09-30)
 
+- **Renamed Candor → GotIt.** A different Wave 1 project was also called "Candor", so neither
+  was findable. Package scope, user-facing copy and storage keys renamed. The deployed
+  contract's `candor:*` hash domain strings are **frozen** — they are inputs to contract
+  `e7cf6ffc…dd53d`, so changing them would reject every prior member as "not a member".
+- **The indexer moved under us and we caught it before the judges did.** The upstream we had
+  been proxying (`blockfrost.lw.iog.io`) now answers `410 Gone — Midnight endpoints have been
+  removed from this proxy`. Moved to the official `indexer.preprod.midnight.network` API v4 and
+  verified end to end: the deployed contract reads back epoch 1 with 2 real submissions, no
+  wallet required. If we had not restored the environment and clicked our own link, the app
+  would have silently shown sample data while claiming to be live.
+- **Restored the hosted environment** (all three Fly apps, 1 machine each) so the deliverable
+  URL resolves for the first time since Wave 1 judging closed.
+
 - **Repositioned to a named buyer with a deadline.** We were pitching "private comp data to
   crypto workers". Now: the Head of Total Rewards at a 150–2,500 person European company
   who must publish gender pay gap statistics by **7 June 2027** under Directive (EU) 2023/970,
@@ -32,6 +45,12 @@ contributors, and future team members.
   reports 21 errors against the real Wave 1 submission.
 - **Published the Wave 1 post-mortem** (`docs/WAVE1-POSTMORTEM.md`), including the recovered
   judge data and the three self-inflicted defects that cost us the round.
+
+### Fixed on the way
+
+- `deploy/issuer.Dockerfile` still filtered the old `@candor/issuer` scope, so an image rebuild
+  installed nothing and the issuer image failed its health check with an opaque
+  "request canceled". The brand rename is now consistent across deploy files.
 
 ## Wave 1 · v0.3.1 — Hosting paused after judging (2026-09-30)
 

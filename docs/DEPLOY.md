@@ -103,10 +103,19 @@ fly scale count 0 -a candor-midnight-issuer --yes
 fly scale count 0 -a candor-midnight-web    --yes
 ```
 
-`fly machine stop` is **not** enough: all three `fly.*.toml` files set
+`fly machine stop` is **not** enough: the web and prover configs set
 `min_machines_running = 1`, so the platform restarts a stopped Machine. `scale count 0`
 removes the Machines (images, releases and the deployed contract stay intact). The three
 public URLs then return 503 — expected while paused.
+
+A plain `fly deploy` leaves the *previous* machine behind alongside the new one. To get back
+to one machine per app:
+
+```bash
+fly machine list -a candor-midnight-web          # find the stale id
+fly machine stop   <stale-id> -a candor-midnight-web
+fly machine destroy <stale-id> -a candor-midnight-web --force
+```
 
 **Resume**
 
@@ -125,6 +134,31 @@ Notes:
   returns 403 on `/proof-server/prove`.
 - The issuer keeps verification leaves in memory, so a redeploy resets them; that is fine for
   demos (codes are issued in-band).
+
+## 9. The indexer moved — check this after any infra change
+
+The browser reads contract state through a same-origin `/indexer/*` proxy (Caddy on Fly, Vite
+in dev). Two upstreams have now failed us, so verify this path rather than assuming it:
+
+| Upstream | Status |
+|---|---|
+| `blockfrost.lw.iog.io/midnight-preprod` | **410 Gone** — "Midnight endpoints have been removed from this proxy" |
+| `indexer.preprod.midnight.network` API **v4** | Current. `/api/v4/graphql`, WS at `/api/v4/graphql/ws` |
+
+Caddy uses `uri strip_prefix /indexer` (not `handle_path`): the path suffix *is* the API path,
+so `/indexer/api/v4/graphql` must reach upstream as `/api/v4/graphql`, trailing slash intact.
+
+Check the proxy is actually serving data:
+
+```bash
+curl -s -X POST https://candor-midnight-web.fly.dev/indexer/api/v4/graphql \
+  -H 'content-type: application/json' \
+  -d '{"query":"query { contractAction(address: \"<CONTRACT>\") { __typename } }"}'
+```
+
+If the app shows the "sample data" badge while this returns data, the proxy config is wrong.
+If this returns 410, the upstream moved again — update `INDEXER_URL` in `fly.web.toml`, the
+target in `apps/web/vite.config.ts`, and the paths in `apps/web/src/lib/chainRead.ts`.
 
 ## Troubleshooting
 

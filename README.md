@@ -111,10 +111,9 @@ to a member — it never sees the secret that derives the nullifier. Removing it
 - **Issuer:** https://candor-midnight-issuer.fly.dev/health
 - **Contract:** `e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d`
 
-Verified end-to-end on Preprod (deploy → enroll → submit → aggregate), then all three Fly
-apps were scaled to 0 machines after Wave 1 judging to stop compute spend — the URLs return
-503 until they are brought back. Images and releases are intact; contract and data are
-unaffected. Resume with:
+Verified end-to-end on Preprod (deploy → enroll → submit → aggregate), with real
+transactions in the contract's histogram. The three Fly apps are **running** — one machine
+each. Resume after a stop with:
 
 ```bash
 set -a; source .env; set +a          # FLY_ACCESS_TOKEN
@@ -122,6 +121,12 @@ fly deploy -c fly.prover.toml        # own proof server (hosted preprod 403s)
 fly deploy -c fly.issuer.toml
 fly deploy -c fly.web.toml           # last: Caddy serves the app + same-origin proxies
 ```
+
+> **Live reads now use the official indexer.** The previous upstream
+> (`blockfrost.lw.iog.io/midnight-preprod`) now returns `410 Gone` — "Midnight endpoints have
+> been removed from this proxy". We moved to `indexer.preprod.midnight.network` API v4, still
+> through our own origin so an indexer change needs no rebuild. Verified: the app reads epoch 1
+> and 2 real submissions straight off the deployed contract.
 
 > The Fly app names still say `candor-*` because renaming an app destroys its URL history.
 > They are infrastructure, not brand.
@@ -140,7 +145,8 @@ Deploy your own instance: `fly deploy -c fly.issuer.toml` then `fly deploy -c fl
 | Browser chain path (Lace + Midnight.js 4.1.1) | **End-to-end verified on Preprod** with real transactions |
 | Compliance report UI | **Wave 2** — engine done, not yet wired into the app |
 | HRIS / payroll export connector | **Wave 3** |
-| Hosted Fly environment | **Paused** (0 machines) — resume commands in [docs/DEPLOY.md](docs/DEPLOY.md) |
+| Live on-chain reads | **Working** — official Preprod indexer (API v4) via a same-origin proxy; reads epoch and real histogram entries with no wallet |
+| Hosted Fly environment | **Running** (1 machine per app) — pause/resume in [docs/DEPLOY.md](docs/DEPLOY.md) |
 | Demo video | **Not yet recorded** |
 
 **In scope for Wave 2:** the Art. 9 report surface, a public verification page, a category

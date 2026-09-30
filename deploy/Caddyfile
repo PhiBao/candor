@@ -12,6 +12,13 @@
 		}
 	}
 
+	# The indexer GraphQL endpoint. strip_prefix is required (not handle_path)
+	# because the path suffix IS the API path: /indexer/api/v4/graphql must reach
+	# upstream as /api/v4/graphql. handle_path would additionally strip the
+	# trailing slash, which the indexer treats as a different route.
+	#
+	# WebSocket subscriptions are upgraded transparently by Caddy, so the client
+	# can use the same origin for both HTTP queries and ws:// subscriptions.
 	handle /indexer/* {
 		uri strip_prefix /indexer
 		reverse_proxy {$INDEXER_URL} {

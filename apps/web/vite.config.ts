@@ -29,8 +29,10 @@ export default defineConfig({
     proxy: {
       // Lace's service worker blocks direct 127.0.0.1 fetches from the page;
       // route proof-server calls through this same-origin proxy instead.
+      // Official Preprod indexer, API v4. The old blockfrost.lw.iog.io
+      // upstream now returns 410 Gone for Midnight endpoints.
       "/indexer": {
-        target: "https://blockfrost.lw.iog.io",
+        target: "https://indexer.preprod.midnight.network",
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/indexer/, ""),
       },
