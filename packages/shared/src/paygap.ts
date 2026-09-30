@@ -21,7 +21,74 @@
  * bucketed data would be a rounding error dressed up as a statistic.
  */
 
-import { BUCKETS, BUCKET_COUNT, K_ANONYMITY, bucketLabel, type Histogram } from "./index.js";
+import { BUCKETS, BUCKET_COUNT, K_ANONYMITY, bucketLabel, bucketsFor, type Histogram } from "./index.js";
+
+// ---- Reporting dimensions (Directive (EU) 2023/970 Art. 9) ----
+
+/**
+ * Art. 9 splits every figure by sex. Only three values are representable
+ * without creating a disclosure risk: the Directive's two required buckets plus
+ * "other / not disclosed". Any finer split — non-binary as a fourth, or a
+ * free-text answer — would produce a cell so small that publishing it
+ * re-identifies someone, and the point of this contract is that it cannot be
+ * made to do that.
+ */
+export const GENDER = {
+  FEMALE: 0,
+  MALE: 1,
+  OTHER: 2,
+} as const;
+export type GenderId = (typeof GENDER)[keyof typeof GENDER];
+export const GENDER_COUNT = 3;
+
+export const GENDER_LABEL: Record<GenderId, string> = {
+  0: "Women",
+  1: "Men",
+  2: "Other / not disclosed",
+};
+
+/**
+ * Art. 9(1)(b) requires the gap to be reported separately for "complementary or
+ * variable components". Blending base and variable into one total is how most
+ * published reports mislead, so they are separate dimensions from the start
+ * rather than a statistic derived afterwards.
+ */
+export const COMPONENT = {
+  BASE: 0,
+  VARIABLE: 1,
+} as const;
+export type ComponentId = (typeof COMPONENT)[keyof typeof COMPONENT];
+export const COMPONENT_COUNT = 2;
+
+export const COMPONENT_LABEL: Record<ComponentId, string> = {
+  0: "Base salary",
+  1: "Variable / complementary",
+};
+
+/** Anonymity threshold used at deploy, and the default for the report engine. */
+export const DEFAULT_K = 5;
+
+export function assertGender(g: number): void {
+  if (!Number.isInteger(g) || g < 0 || g >= GENDER_COUNT) {
+    throw new Error(`gender must be 0..${GENDER_COUNT - 1}, got ${g}`);
+  }
+}
+
+export function assertComponent(c: number): void {
+  if (!Number.isInteger(c) || c < 0 || c >= COMPONENT_COUNT) {
+    throw new Error(`component must be 0..${COMPONENT_COUNT - 1}, got ${c}`);
+  }
+}
+
+/** A reporting group as the Directive means it: one category, one gender, one component. */
+export type ReportingGroup = {
+  /** Hash of the employer's "category of worker" label — never the label text. */
+  categoryKeyHex: string;
+  /** Human-readable label, held off-chain and published in the report. */
+  categoryLabel: string;
+  gender: GenderId;
+  component: ComponentId;
+};
 
 // ---- Pay component ----
 
@@ -51,11 +118,18 @@ function zeros(): Histogram {
   return Array(BUCKET_COUNT).fill(0);
 }
 
-/** Midpoint of a bucket; the top bucket uses a finite stand-in (see notes). */
-export function bucketMid(bucket: number): number {
-  const b = BUCKETS[bucket];
+/**
+ * Midpoint of a bucket; the top bucket uses a finite stand-in (see notes).
+ *
+ * Component-aware: base and variable use different bucket scales, so a
+ * midpoint computed from the base table would be wrong by an order of magnitude
+ * for a bonus. Every statistic below is therefore parameterised by component
+ * rather than assuming the base scale.
+ */
+export function bucketMid(bucket: number, component: 0 | 1 = 0): number {
+  const b = bucketsFor(component)[bucket];
   if (!b) return Number.NaN;
-  if (!Number.isFinite(b.max)) return 350_000; // conservative for an open-ended top bucket
+  if (!Number.isFinite(b.max)) return component === 0 ? 350_000 : 100_000;
   return (b.min + b.max) / 2;
 }
 
@@ -105,20 +179,20 @@ export function isReportable(h: Histogram, k = K_ANONYMITY): boolean {
  * single middle observation, which a histogram cannot pin down — so we return
  * the interval between the two central buckets instead of guessing.
  */
-export function medianInterval(h: Histogram): Interval | null {
+export function medianInterval(h: Histogram, component: 0 | 1 = 0): Interval | null {
   const n = groupSize(h);
   if (n === 0) return null;
   if (n % 2 === 1) {
     const mid = (n + 1) / 2;
     const b = bucketAtRank(h, mid);
     if (b === null) return null;
-    const bd = BUCKETS[b];
+    const bd = bucketsFor(component)[b];
     return interval(bd.min, Number.isFinite(bd.max) ? bd.max : Number.POSITIVE_INFINITY);
   }
   const lower = bucketAtRank(h, n / 2);
   const upper = bucketAtRank(h, n / 2 + 1);
   if (lower === null || upper === null) return null;
-  return interval(bucketMin(lower), bucketMax(upper));
+  return interval(bucketMin(lower, component), bucketMax(upper, component));
 }
 
 /**
@@ -133,24 +207,24 @@ export type Quartiles = {
   q3: Interval;
 };
 
-export function quartiles(h: Histogram): Quartiles | null {
+export function quartiles(h: Histogram, component: 0 | 1 = 0): Quartiles | null {
   const n = groupSize(h);
   if (n < 4) return null;
   return {
-    q1: thresholdAtFraction(h, 0.25),
-    q2: thresholdAtFraction(h, 0.5),
-    q3: thresholdAtFraction(h, 0.75),
+    q1: thresholdAtFraction(h, 0.25, component),
+    q2: thresholdAtFraction(h, 0.5, component),
+    q3: thresholdAtFraction(h, 0.75, component),
   };
 }
 
 /** The bucket boundary at the given cumulative fraction of the group. */
-function thresholdAtFraction(h: Histogram, frac: number): Interval {
+function thresholdAtFraction(h: Histogram, frac: number, component: 0 | 1 = 0): Interval {
   const n = groupSize(h);
   if (n === 0) return interval(0, 0);
   const target = Math.max(1, Math.min(n, Math.round(frac * n)));
   const b = bucketAtRank(h, target);
   if (b === null) return interval(0, 0);
-  return interval(bucketMin(b), bucketMax(b));
+  return interval(bucketMin(b, component), bucketMax(b, component));
 }
 
 function bucketAtRank(h: Histogram, rank: number): number | null {
@@ -165,12 +239,12 @@ function bucketAtRank(h: Histogram, rank: number): number | null {
   return null;
 }
 
-function bucketMin(b: number): number {
-  return BUCKETS[b]?.min ?? 0;
+function bucketMin(b: number, component: 0 | 1 = 0): number {
+  return bucketsFor(component)[b]?.min ?? 0;
 }
 
-function bucketMax(b: number): number {
-  const m = BUCKETS[b]?.max;
+function bucketMax(b: number, component: 0 | 1 = 0): number {
+  const m = bucketsFor(component)[b]?.max;
   return Number.isFinite(m as number) ? (m as number) : Number.POSITIVE_INFINITY;
 }
 
@@ -179,15 +253,16 @@ function bucketMax(b: number): number {
  * midpoints (lower bound, when everyone sits at the bottom of their bucket) and
  * the mean of all bucket maxima (upper bound).
  */
-export function meanInterval(h: Histogram): Interval | null {
+export function meanInterval(h: Histogram, component: 0 | 1 = 0): Interval | null {
   const n = groupSize(h);
   if (n === 0) return null;
   let low = 0;
   let high = 0;
   for (let i = 0; i < h.length; i++) {
     if (h[i] === 0) continue;
-    low += h[i] * bucketMin(i);
-    high += h[i] * (Number.isFinite(bucketMax(i)) ? bucketMax(i) : bucketMid(i));
+    low += h[i] * bucketMin(i, component);
+    const mx = bucketMax(i, component);
+    high += h[i] * (Number.isFinite(mx) ? mx : bucketMid(i, component));
   }
   return interval(low / n, high / n);
 }

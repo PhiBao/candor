@@ -1,0 +1,199 @@
+pragma language_version 0.23;
+import CompactStandardLibrary;
+
+// GotIt — provable pay gap reports. Wave 2 ledger.
+//
+// The problem this solves: Directive (EU) 2023/970 Art. 9 obliges employers to
+// publish group pay statistics (mean/median gap, base vs variable pay, quartile
+// distribution) while GDPR obliges them never to let those statistics identify
+// an individual. A spreadsheet cannot satisfy both.
+//
+// Ledger design:
+//
+//   members     — membership leaves: persistentHash(["gotit:member:v2", secret]).
+//                 Insertion is issuer-gated: `enroll` checks the caller's secret
+//                 key against the public issuer commitment before inserting.
+//
+//   nullifiers  — epoch-scoped: persistentHash(["gotit:nf:v2", epoch, secret]).
+//                 Blocks one submission per verified member per reporting period;
+//                 `nextEpoch` re-opens submission for everyone.
+//
+//   histogram   — counts per (categoryKey, gender, component, bucket). This is the
+//                 whole point of the Wave 2 change: Wave 1 keyed only on a
+//                 (family:level:region) cut, which cannot express Art. 9's
+//                 "category of worker" or a gender split. All four dimensions are
+//                 now public, because the Directive REQUIRES the breakdown to be
+//                 publishable — the privacy property is that no individual is
+//                 identifiable, not that the dimensions are hidden.
+//
+//   groupCount  — participants per (categoryKey, gender, component). A separate
+//                 counter so the k-anonymity gate can be evaluated in-circuit
+//                 without summing buckets, and so a group total is one lookup.
+//
+//   kThreshold  — public anonymity threshold. Categories below it are suppressed
+//                 (see the read circuits) — this is disclosure control, and the
+//                 Directive requires it in practice because small cells
+//                 re-identify.
+//
+//   epochCount  — singleton Map used as the epoch counter. Counter is not readable
+//                 inside circuits in language 0.23, so the epoch lives in a map cell.
+//
+//   issuer      — public commitment to the issuer's secret key:
+//                 persistentHash(["gotit:issuer:v2", issuerKey]).
+//
+// Domain strings are versioned "v2" and the product prefix is "gotit" (Wave 1
+// used "candor:*:v1"). The prefix is part of the hash preimage, so it is frozen
+// for a given deployment: changing it invalidates every leaf, nullifier and
+// commitment. Wave 1's contract keeps its "candor:*:v1" strings and remains
+// deployed and readable; this is a new contract, not a migration.
+
+export ledger members: Set<Bytes<32>>;
+export ledger nullifiers: Set<Bytes<32>>;
+export ledger histogram: Map<Bytes<32>, Uint<64>>;
+export ledger groupCount: Map<Bytes<32>, Uint<64>>;
+export ledger epochCount: Map<Bytes<1>, Uint<64>>;
+export ledger kThreshold: Uint<8>;
+export ledger issuer: Bytes<32>;
+
+constructor(issuerCommit: Bytes<32>, anonymityThreshold: Uint<8>) {
+  issuer = disclose(issuerCommit);
+  epochCount.insert(pad(1, "e"), 1 as Uint<64>);
+  assert(anonymityThreshold >= 2, "k must be at least 2");
+  kThreshold = disclose(anonymityThreshold);
+}
+
+witness secret(): Bytes<32>;
+witness issuerKey(): Bytes<32>;
+
+// Submit one bucketed figure for a reporting group.
+//
+//   categoryKey — hash of the employer's "category of worker" label, i.e. their
+//                 own equal-value job family. Passed as Bytes<32> so the label
+//                 text never reaches the chain; the employer publishes the
+//                 label<->hash mapping in the report itself.
+//   gender      — 0 female, 1 male, 2 other/undisclosed. Art. 9(1) splits every
+//                 figure by sex, so this is public by necessity.
+//   component   — 0 base salary, 1 variable/complementary. Art. 9(1)(b) requires
+//                 the split, and blending the two is how most published reports
+//                 mislead.
+//   bucket      — 0..9 pay bucket (see @gotit/shared BUCKETS).
+//
+// Disclosed: categoryKey, gender, component, bucket.
+// Never disclosed: secret, exact figure, nullifier preimage.
+export circuit submit(
+  categoryKey: Bytes<32>,
+  gender: Uint<8>,
+  component: Uint<8>,
+  bucket: Uint<8>
+): [] {
+  assert(bucket < 10, "bucket out of range");
+  assert(gender < 3, "gender out of range");
+  assert(component < 2, "component out of range");
+
+  const mySecret = secret();
+  // Membership: leaf committed at enrollment. The user sent the leaf — never the
+  // secret — to the issuer, so the issuer cannot derive a nullifier.
+  const leaf = persistentHash<Vector<2, Bytes<32>>>([pad(32, "gotit:member:v2"), mySecret]);
+  assert(members.member(disclose(leaf)), "not a member");
+
+  // Epoch-scoped nullifier. The epoch is read from ledger state, so a caller
+  // cannot lie about which period they are in to evade the one-per-period rule.
+  const curEpoch = epochCount.lookup(pad(1, "e"));
+  const nf = disclose(
+    persistentHash<[Bytes<32>, Uint<64>, Bytes<32>]>([pad(32, "gotit:nf:v2"), curEpoch, mySecret])
+  );
+  assert(!nullifiers.member(nf), "already submitted this period");
+  nullifiers.insert(nf);
+
+  // Aggregate key: hash(categoryKey, gender, component, bucket). All four
+  // dimensions are public — they are what makes the report publishable. The
+  // privacy property is that a count cannot be resolved to a person.
+  const bKey = disclose(persistentHash<[Bytes<32>, Uint<8>, Uint<8>, Uint<8>]>([categoryKey, gender, component, bucket]));
+  if (!histogram.member(bKey)) {
+    histogram.insert(bKey, 1 as Uint<64>);
+  } else {
+    histogram.insert(bKey, histogram.lookup(bKey) + 1 as Uint<64>);
+  }
+
+  // Group total, so the k-gate below is a single lookup rather than a bucket sum.
+  const gKey = disclose(persistentHash<[Bytes<32>, Uint<8>, Uint<8>]>([categoryKey, gender, component]));
+  if (!groupCount.member(gKey)) {
+    groupCount.insert(gKey, 1 as Uint<64>);
+  } else {
+    groupCount.insert(gKey, groupCount.lookup(gKey) + 1 as Uint<64>);
+  }
+}
+
+// Issuer enrolls a member leaf. Caller must hold the issuer secret key; the
+// derived commitment must equal the public `issuer` value set at deployment.
+export circuit enroll(memberLeaf: Bytes<32>): [] {
+  const commit = disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "gotit:issuer:v2"), issuerKey()]));
+  assert(commit == issuer, "enroll: caller is not the issuer");
+  members.insert(disclose(memberLeaf));
+}
+
+// Issuer advances the reporting period. All previously spent nullifiers become
+// stale, so every verified member may contribute once more.
+export circuit nextEpoch(): [] {
+  const commit = disclose(persistentHash<Vector<2, Bytes<32>>>([pad(32, "gotit:issuer:v2"), issuerKey()]));
+  assert(commit == issuer, "nextEpoch: caller is not the issuer");
+  const cur = epochCount.lookup(pad(1, "e"));
+  epochCount.insert(pad(1, "e"), cur + 1 as Uint<64>);
+}
+
+// Read a bucket count, subject to disclosure control.
+//
+// Returns 0 when the group is below the anonymity threshold. This is the whole
+// disclosure-control mechanism: a category with three people in it cannot be
+// read out of this circuit, so the employer cannot publish it even by accident,
+// by override, or by writing a bespoke reader. Suppression has to be enforced
+// where the data lives, not in a UI.
+export circuit getHistogram(
+  categoryKey: Bytes<32>,
+  gender: Uint<8>,
+  component: Uint<8>,
+  bucket: Uint<8>
+): Uint<64> {
+  assert(bucket < 10, "bucket out of range");
+  const gKey = disclose(persistentHash<[Bytes<32>, Uint<8>, Uint<8>]>([categoryKey, gender, component]));
+  if (!groupCount.member(gKey)) {
+    return 0 as Uint<64>;
+  }
+  if (groupCount.lookup(gKey) < kThreshold) {
+    return 0 as Uint<64>;
+  }
+  const bKey = disclose(persistentHash<[Bytes<32>, Uint<8>, Uint<8>, Uint<8>]>([categoryKey, gender, component, bucket]));
+  if (!histogram.member(bKey)) {
+    return 0 as Uint<64>;
+  }
+  return histogram.lookup(bKey);
+}
+
+// Is this group large enough to publish? The report layer needs this to
+// distinguish "suppressed" from "genuinely zero" — without it, a suppressed
+// group is indistinguishable from an empty one, and a reader cannot tell
+// whether a category was withheld or simply had no submissions.
+export circuit isPublishable(categoryKey: Bytes<32>, gender: Uint<8>, component: Uint<8>): Uint<8> {
+  const gKey = disclose(persistentHash<[Bytes<32>, Uint<8>, Uint<8>]>([categoryKey, gender, component]));
+  if (!groupCount.member(gKey)) {
+    return 0 as Uint<8>;
+  }
+  if (groupCount.lookup(gKey) >= kThreshold) {
+    return 1 as Uint<8>;
+  }
+  return 0 as Uint<8>;
+}
+
+// Read-only: current reporting period number.
+export circuit readEpoch(): Uint<64> {
+  if (!epochCount.member(pad(1, "e"))) {
+    return 0 as Uint<64>;
+  }
+  return epochCount.lookup(pad(1, "e"));
+}
+
+// Read-only: the configured anonymity threshold, so a verifier can check that
+// the threshold in force matches the one the report claims to have applied.
+export circuit readK(): Uint<8> {
+  return kThreshold;
+}

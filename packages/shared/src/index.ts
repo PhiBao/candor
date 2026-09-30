@@ -46,16 +46,45 @@ export const BUCKETS = [
   { id: 9, label: "$350k+", min: 350_000, max: Number.POSITIVE_INFINITY },
 ] as const;
 
-export function bucketForSalary(salary: number): number {
-  if (!Number.isFinite(salary) || salary < 0) throw new Error("invalid salary");
-  for (const b of BUCKETS) {
+/**
+ * Buckets for the two Art. 9 components, on a scale that suits each.
+ *
+ * Base salary is where the Directive's figures concentrate, so it gets the fine
+ * scale. Variable pay is dominated by bonuses and commission, which are both
+ * smaller and far more skewed — a scale calibrated for salary would put almost
+ * every variable figure in bucket 0 and destroy the distribution the report is
+ * supposed to show. This is the same bucketing-honesty point as the interval
+ * arithmetic, applied to the axis instead of the summary statistic.
+ */
+export const BASE_BUCKETS = BUCKETS;
+
+export const VARIABLE_BUCKETS = [
+  { id: 0, label: "$0", min: 0, max: 1 },
+  { id: 1, label: "$1–2.5k", min: 1, max: 2_500 },
+  { id: 2, label: "$2.5–5k", min: 2_500, max: 5_000 },
+  { id: 3, label: "$5–10k", min: 5_000, max: 10_000 },
+  { id: 4, label: "$10–15k", min: 10_000, max: 15_000 },
+  { id: 5, label: "$15–25k", min: 15_000, max: 25_000 },
+  { id: 6, label: "$25–40k", min: 25_000, max: 40_000 },
+  { id: 7, label: "$40–60k", min: 40_000, max: 60_000 },
+  { id: 8, label: "$60–100k", min: 60_000, max: 100_000 },
+  { id: 9, label: "$100k+", min: 100_000, max: Number.POSITIVE_INFINITY },
+] as const;
+
+export function bucketsFor(component: 0 | 1): readonly { id: number; label: string; min: number; max: number }[] {
+  return component === 0 ? BASE_BUCKETS : VARIABLE_BUCKETS;
+}
+
+export function bucketForSalary(salary: number, component: 0 | 1 = 0): number {
+  if (!Number.isFinite(salary) || salary < 0) throw new Error("invalid amount");
+  for (const b of bucketsFor(component)) {
     if (salary >= b.min && salary < b.max) return b.id;
   }
   return 9;
 }
 
-export function bucketLabel(id: number): string {
-  return BUCKETS.find((b) => b.id === id)?.label ?? `bucket ${id}`;
+export function bucketLabel(id: number, component: 0 | 1 = 0): string {
+  return bucketsFor(component).find((b) => b.id === id)?.label ?? `bucket ${id}`;
 }
 
 // ---- Cuts ----

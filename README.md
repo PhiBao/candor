@@ -59,24 +59,102 @@ company, whose project starts now because they must report on last year.
 
 ## Architecture
 
+The one thing to understand: **the salary is a private witness, and only counts are ever
+public.** Everything else follows from that.
+
+```mermaid
+flowchart TB
+  subgraph top["Proving — the salary never leaves the device"]
+    direction LR
+    W["Private witness<br/>secret, job category,<br/>gender, base + variable pay"]
+    P["Proof generated locally"]
+    I["Issuer service<br/>verifies work email, inserts a leaf<br/>never sees the secret"]
+    W --> P
+  end
+
+  subgraph ledger["Midnight ledger — the only public state"]
+    direction LR
+    M["members<br/>Set of leaf"]
+    N["nullifiers<br/>Set of hash(secret, period)"]
+    G["groupCount<br/>per category x gender x component"]
+    HIST["histogram<br/>per category x gender x component x bucket"]
+    K["kThreshold"]
+    M --> G
+    N --> HIST
+    M --> HIST
+    G --> HIST
+    K --> G
+  end
+
+  GH["getHistogram — <b>returns 0 below k</b>"]
+  IP["isPublishable — suppressed vs genuinely empty"]
+  R["Report engine<br/>pure, no I/O<br/>Art. 9 statistics as intervals"]
+  MD["renderReportMarkdown<br/><i>the artifact that gets filed</i>"]
+  FP["fingerprint over the exact bucket counts"]
+  V["Verify page — paste a fingerprint,<br/>get match or mismatch"]
+
+  P -->|proves| M
+  P -->|proves| N
+  P -->|"reveals the four dimensions"| HIST
+  I -->|enroll| M
+  HIST --> GH
+  G --> GH
+  G --> IP
+  K --> GH
+  GH --> R
+  IP --> R
+  R --> MD
+  R --> FP
+  FP --> V
+  V -.->|"re-reads chain state"| HIST
+
+  style ledger fill:#121214,stroke:#facc15,color:#f5f5f4
+  style top fill:#0a0a0b,stroke:#52525b,color:#f5f5f4
+  style K fill:#1a1500,stroke:#facc15,color:#facc15
+  style G fill:#0a1a0f,stroke:#22c55e,color:#86efac
+  style GH fill:#0a1a0f,stroke:#22c55e,color:#86efac
 ```
-packages/contract   Compact source + generated TS + vitest circuit suite (13 tests)
-packages/shared     Cuts, buckets, hashing, k-gate, and the Art. 9 report engine
-packages/issuer     Email verification -> leaf insertion (only trusted component)
-apps/web            Public report pages + guided contribute wizard (Vite + React)
-```
 
-**Ledger (Wave 1, unchanged on-chain)**
+Two properties in that diagram are load-bearing:
 
-- `members: Set<Bytes<32>>` — leaf = `persistentHash([pad(32,"candor:member:v1"), secret])`, issuer-gated
-- `nullifiers: Set<Bytes<32>>` — **epoch-scoped**, one per member per epoch
-- `histogram: Map<Bytes<32>, Uint<64>>` — key = `persistentHash([cutKey, bucket])`
-- `epochCount: Map<Bytes<1>, Uint<64>>` — readable epoch cell (issuer advances via `nextEpoch`)
-- `issuer: Bytes<32>` — public commitment to the issuer's secret key
+1. **The issuer can verify membership but cannot link a submission to a person.** It receives
+   a *leaf* — `hash(secret)` — and never the secret that generates the nullifier, so it cannot
+   derive anyone's nullifier, let alone match it to a cell.
+2. **Suppression lives in the read circuit, not in the UI.** `getHistogram` returns 0 for any
+   group below `kThreshold`, so a category with three people in it cannot be published — not
+   by an employer override, not by a bespoke reader, not by accident. `groupCount` is per
+   `(category, gender, component)`, so a large group in one category can never make a group of
+   one in another publishable.
 
-> The `candor:*` domain strings above are **frozen**: they are inputs to the deployed
-> contract's hash derivations at `e7cf6ffc…dd53d`. Renaming them would break parity with
-> existing on-chain state. A future redeploy can move them to `gotit:*` under a version bump.
+**Packages**
+
+| Package | Role | Tests |
+|---|---|---|
+| `packages/contract` | Compact source → generated TS → proving keys; two ledgers (v1 deployed, v2 Wave 2) | 34 |
+| `packages/shared` | Hash parity with the circuits, bucket scales, the Art. 9 report engine | 38 |
+| `packages/issuer` | Work-email verification → leaf insertion (the only trusted component) | — |
+| `apps/web` | Report page, verification page, contribute wizard, Operator console | 14 |
+
+**Ledger (v2 — the Wave 2 contract)**
+
+| Field | Purpose |
+|---|---|
+| `members: Set<Bytes<32>>` | leaf = `persistentHash(["gotit:member:v2", secret])`, insertion issuer-gated |
+| `nullifiers: Set<Bytes<32>>` | **period-scoped**: `persistentHash(["gotit:nf:v2", period, secret])` |
+| `histogram: Map<Bytes<32>, Uint<64>>` | key = `persistentHash([categoryKey, gender, component, bucket])` |
+| `groupCount: Map<Bytes<32>, Uint<64>>` | key = `persistentHash([categoryKey, gender, component])` — the k-gate input |
+| `kThreshold: Uint<8>` | anonymity threshold, fixed at deployment (`readK()` is public) |
+| `epochCount: Map<Bytes<1>, Uint<64>>` | readable period cell; `Counter` is not readable inside 0.23 circuits |
+| `issuer: Bytes<32>` | public commitment to the issuer's secret key |
+
+Seven circuits: `submit`, `enroll`, `nextEpoch`, `getHistogram`, `isPublishable`, `readEpoch`,
+`readK`.
+
+> **Wave 1's contract is untouched.** It stays deployed at `e7cf6ffc…dd53d` with its
+> `candor:*:v1` domain strings, which are inputs to its hash derivations. v2 is a separate
+> contract with `gotit:*:v2` strings — a v1 leaf deliberately does not validate against v2,
+> which is what the version bump is for. Both hash versions live in
+> `packages/shared/src/hash.ts`, side by side, each annotated with why it is frozen.
 
 **Report engine (`packages/shared/src/paygap.ts`)**
 

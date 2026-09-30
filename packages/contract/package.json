@@ -13,17 +13,26 @@
       "types": "./dist/managed/candor/contract/index.d.ts",
       "import": "./dist/managed/candor/contract/index.js"
     },
+    "./managed/gotit/contract": {
+      "types": "./dist/managed/gotit/contract/index.d.ts",
+      "import": "./dist/managed/gotit/contract/index.js"
+    },
     "./witnesses": {
       "types": "./dist/witnesses.d.ts",
       "import": "./dist/witnesses.js"
+    },
+    "./witnesses-v2": {
+      "types": "./dist/witnesses.v2.d.ts",
+      "import": "./dist/witnesses.v2.js"
     }
   },
   "scripts": {
-    "compile": "compact compile src/candor.compact src/managed/candor --skip-zk || compact compile src/candor.compact src/managed/candor",
-    "compile:zk": "compact compile src/candor.compact src/managed/candor",
+    "compile": "compact compile src/gotit.compact src/managed/gotit",
+    "compile:zk": "compact compile src/gotit.compact src/managed/gotit",
     "build": "tsc -p tsconfig.build.json && rm -rf dist/managed && cp -R src/managed dist/managed",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "compile:v1": "compact compile src/candor.compact src/managed/candor"
   },
   "dependencies": {
     "@gotit/shared": "workspace:*",
