@@ -6,9 +6,9 @@
  */
 import { indexerPublicDataProvider } from "@midnight-ntwrk/midnight-js-indexer-public-data-provider";
 import { asContractAddress } from "@midnight-ntwrk/midnight-js-types";
-import { ledger as candorLedger } from "@candor/contract/managed/candor/contract";
-import { bucketKeyBytes, cutKeyBytes } from "@candor/shared/hash";
-import { BUCKET_COUNT, type Cut, cutKeyString } from "@candor/shared";
+import { ledger as gotitLedger } from "@gotit/contract/managed/candor/contract";
+import { bucketKeyBytes, cutKeyBytes } from "@gotit/shared/hash";
+import { BUCKET_COUNT, type Cut, cutKeyString } from "@gotit/shared";
 import type { LedgerSnapshot } from "./ledger";
 
 // Same-origin proxy (Caddy on Fly, Vite in dev) — the indexer sends no CORS
@@ -27,7 +27,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  * Read the deployed contract's public ledger state.
  * Throws on failure — callers must handle (sample data is the fallback).
  */
-export async function readCandorState(contractAddress: string): Promise<{
+export async function readGotItState(contractAddress: string): Promise<{
   epoch: string;
   members: number;
   submissions: number;
@@ -35,12 +35,12 @@ export async function readCandorState(contractAddress: string): Promise<{
 }> {
   const state = await withTimeout(provider.queryContractState(asContractStateAddress(contractAddress)), 15_000);
   if (!state) throw new Error("contract state not found on indexer");
-  const led = candorLedger((state as any).data ?? state);
+  const led = gotitLedger((state as any).data ?? state);
 
   const epoch = led.epochCount.lookup(new Uint8Array([101]));
   const histogram: Record<string, number> = {};
   // Populate histogram for all Wave 1 cuts so public pages are live
-  const { allCuts } = await import("@candor/shared");
+  const { allCuts } = await import("@gotit/shared");
   for (const cut of allCuts()) {
     const ck = cutKeyBytes(cutKeyString(cut));
     for (let b = 0; b < BUCKET_COUNT; b++) {
@@ -73,7 +73,7 @@ export async function readHistogramInto(
 ): Promise<void> {
   const state = await withTimeout(provider.queryContractState(asContractStateAddress(contractAddress)), 15_000);
   if (!state) throw new Error("contract state not found on indexer");
-  const led = candorLedger((state as any).data ?? state);
+  const led = gotitLedger((state as any).data ?? state);
   const ck = cutKeyBytes(cutKeyString(cut));
   for (let b = 0; b < BUCKET_COUNT; b++) {
     let v = 0;

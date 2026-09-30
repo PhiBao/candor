@@ -1,10 +1,12 @@
-# @candor/contract
+# @gotit/contract
 
 Compact 0.31.1 · Language 0.23.0
 
 ## Contract overview
 
-`src/candor.compact` — Wave 1 Candor ledger.
+`src/candor.compact` — the deployed Wave 1 ledger. The filename is frozen: its
+`candor:*` domain strings are inputs to the hash derivations of the contract live at
+`e7cf6ffc…dd53d`. Renaming the product (Candor -> GotIt) did not rename this file.
 
 - `members: Set<Bytes<32>>` — leaf = `persistentHash([pad(32,"candor:member:v1"), secret])`, insertion issuer-gated
 - `nullifiers: Set<Bytes<32>>` — **epoch-scoped**: `persistentHash([pad(32,"candor:nf:v1"), epoch, secret])` — one submission per member per epoch; `nextEpoch` re-opens
@@ -25,14 +27,14 @@ Wave 1 discloses the leaf to check `members.member(disclose(leaf))`. The member 
 
 ### Hash parity
 
-`@candor/shared/hash` derives `memberLeaf`, `epochNullifier`, `bucketKeyBytes`, `issuerCommitment`, and `cutKeyBytes` with the same runtime primitives (`persistentHash` + identical type descriptors) as the compiled circuits. The circuit test suite asserts parity — if TS and circuit hashing ever drift, tests fail with `not a member`.
+`@gotit/shared/hash` derives `memberLeaf`, `epochNullifier`, `bucketKeyBytes`, `issuerCommitment`, and `cutKeyBytes` with the same runtime primitives (`persistentHash` + identical type descriptors) as the compiled circuits. The circuit test suite asserts parity — if TS and circuit hashing ever drift, tests fail with `not a member`.
 
 ## Compile
 
 ```bash
-pnpm --filter @candor/contract compile
+pnpm --filter @gotit/contract compile
 # or with proving keys (slower)
-pnpm --filter @candor/contract compile:zk
+pnpm --filter @gotit/contract compile:zk
 ```
 
 Output: `src/managed/candor/` with `contract/`, `keys/`, `zkir/`, `compiler/contract-info.json`. Compiled artifacts (including proving keys) are committed so evaluators can run without installing the Compact toolchain.
@@ -42,7 +44,7 @@ Output: `src/managed/candor/` with `contract/`, `keys/`, `zkir/`, `compiler/cont
 The suite runs the **generated contract circuits** off-chain (same ledger program the chain executes, minus the zk proof) plus a mock ledger mirroring the same semantics:
 
 ```bash
-pnpm --filter @candor/contract test
+pnpm --filter @gotit/contract test
 ```
 
 Covers: happy path (enroll → submit → histogram read), double-submit rejected + `nextEpoch` re-opens, non-member rejected, out-of-range bucket rejected, non-issuer `enroll`/`nextEpoch` rejected, TS↔circuit hash parity, differential-leak regression (histogram delta reveals only bucket index).
@@ -55,10 +57,10 @@ docker compose -f proof-server.yml up
 
 # 2. configure .env (see .env.example)
 cp .env.example .env
-# edit MIDNIGHT_WALLET_SEED, CANDOR_ISSUER_KEY, etc.
+# edit MIDNIGHT_WALLET_SEED, GOTIT_ISSUER_KEY, etc.
 
 # 3. deploy
-pnpm --filter @candor/contract deploy:preprod
+pnpm --filter @gotit/contract deploy:preprod
 ```
 
 See `docs/DEPLOY.md` for the full walkthrough and `src/deploy.ts` for provider wiring. The web app's `src/lib/midnight.ts` contains the browser-side equivalent using `FetchZkConfigProvider` + Lace DApp Connector.

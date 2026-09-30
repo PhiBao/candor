@@ -4,8 +4,13 @@
  * for any connector with a compatible apiVersion.
  */
 const COMPATIBLE_MAJOR = "4";
-const ADDR_KEY = "candor:contractAddress";
-const ISSUER_KEY_KEY = "candor:issuerKey";
+const ADDR_KEY = "gotit:contractAddress";
+const ISSUER_KEY_KEY = "gotit:issuerKey";
+// Renamed from "candor:*" in Wave 2. Read the old keys as a fallback so a
+// returning visitor keeps their stored contract address and issuer key instead
+// of silently losing them. Old keys are left in place (never deleted) so a
+// rollback to Wave 1 still finds them.
+const LEGACY_PREFIX = "candor:";
 // Baked at build time (fly deploy build arg) so visitors land on the deployed contract
 const BAKED_ADDRESS: string = (import.meta as any).env?.VITE_CONTRACT_ADDRESS ?? "";
 const BAKED_ISSUER_KEY: string = (import.meta as any).env?.VITE_ISSUER_KEY ?? "";
@@ -25,11 +30,22 @@ export function isLaceAvailable(): boolean {
   } catch { return false; }
 }
 
+/** Read a key, transparently falling back to its pre-rename `candor:` form. */
 function readStorage(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
+  try {
+    const now = localStorage.getItem(key);
+    if (now !== null) return now;
+    if (key.startsWith("gotit:")) return localStorage.getItem(LEGACY_PREFIX + key.slice("gotit:".length));
+    return null;
+  } catch { return null; }
 }
 function safeSessionGet(key: string): string | null {
-  try { return sessionStorage.getItem(key); } catch { return null; }
+  try {
+    const now = sessionStorage.getItem(key);
+    if (now !== null) return now;
+    if (key.startsWith("gotit:")) return sessionStorage.getItem(LEGACY_PREFIX + key.slice("gotit:".length));
+    return null;
+  } catch { return null; }
 }
 function safeSessionSet(key: string, val: string) {
   try { sessionStorage.setItem(key, val); } catch {}
@@ -51,10 +67,8 @@ export function getBakedIssuerKey(): string | null {
 }
 
 export function getStoredIssuerKey(): string | null {
-  try {
-    const v = localStorage.getItem(ISSUER_KEY_KEY);
-    if (v && /^[0-9a-fA-F]{64}$/.test(v.replace(/^0x/, "").trim())) return v.replace(/^0x/, "").trim().toLowerCase();
-  } catch {}
+  const v = readStorage(ISSUER_KEY_KEY);
+  if (v && /^[0-9a-fA-F]{64}$/.test(v.replace(/^0x/, "").trim())) return v.replace(/^0x/, "").trim().toLowerCase();
   return getBakedIssuerKey();
 }
 

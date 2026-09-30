@@ -1,6 +1,13 @@
-# Deploying Candor to Midnight Preprod
+# Deploying GotIt to Midnight Preprod
 
-Status: this walkthrough targets Wave 1. The contract compiles and its circuits are tested off-chain; the deployment script is the remaining piece being wired to Midnight.js. Follow this doc top to bottom.
+Status: the contract is **compiled, tested and live on Preprod** at
+`e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d`. The browser Operator
+console in `apps/web` is the working deployment path; the CLI script is a stub. Follow this doc
+top to bottom for a fresh environment, or §8 to resume the paused hosted deployment.
+
+> The contract source is `packages/contract/src/candor.compact`. The name is **frozen** — its
+> `candor:*` domain strings are inputs to the deployed contract's hash derivations. The product
+> was renamed Candor → GotIt; the contract identifiers were not.
 
 ## 0. Prerequisites
 
@@ -15,7 +22,7 @@ Status: this walkthrough targets Wave 1. The contract compiles and its circuits 
 pnpm install
 pnpm contract:compile        # compact compile src/candor.compact src/managed/candor
 pnpm contract:build
-pnpm --filter @candor/contract test   # circuit tests must pass before deploy
+pnpm --filter @gotit/contract test   # circuit tests must pass before deploy
 ```
 
 ## 2. Start the proof server (user-local)
@@ -54,14 +61,14 @@ cp packages/contract/.env.example packages/contract/.env
 | `MIDNIGHT_INDEXER` / `MIDNIGHT_INDEXER_WS` | Preprod indexer GraphQL endpoints |
 | `PROOF_SERVER` | `http://localhost:6300` |
 | `MIDNIGHT_WALLET_SEED` | deployer seed — **never commit the real value** |
-| `CANDOR_ISSUER_KEY` | 32-byte hex issuer secret key used by `enroll`/`nextEpoch` |
+| `GOTIT_ISSUER_KEY` | 32-byte hex issuer secret key used by `enroll`/`nextEpoch` |
 
-The deploy script derives `issuerCommit = persistentHash([pad(32,"candor:issuer:v1"), issuerKey])` via `@candor/shared/hash` (bit-identical to the circuit) and passes it to the constructor.
+The deploy script derives `issuerCommit = persistentHash([pad(32,"candor:issuer:v1"), issuerKey])` via `@gotit/shared/hash` (bit-identical to the circuit) and passes it to the constructor.
 
 ## 5. Deploy
 
 ```bash
-pnpm --filter @candor/contract deploy:preprod
+pnpm --filter @gotit/contract deploy:preprod
 ```
 
 The script prints the contract address. Store it in `CONTRACT_ADDRESS` (same `.env`) — the web app and issuer read it from there.
@@ -71,13 +78,13 @@ The script prints the contract address. Store it in `CONTRACT_ADDRESS` (same `.e
 ```bash
 # read epoch (should be 1)
 # read a histogram bucket via the indexer public data provider
-pnpm --filter @candor/contract verify:preprod
+pnpm --filter @gotit/contract verify:preprod
 ```
 
 ## 7. Run the issuer + web app
 
 ```bash
-pnpm --filter @candor/issuer dev   # :8787
+pnpm --filter @gotit/issuer dev   # :8787
 pnpm dev                           # :5173, proxies /issuer
 ```
 
@@ -126,5 +133,5 @@ Notes:
 | Proof server connection refused | `docker compose -f packages/contract/proof-server.yml up` not running, or wrong `PROOF_SERVER` |
 | `Insufficient Funds: could not balance dust` | tNIGHT not registered for DUST generation yet — run **Generate tDUST** in Lace and wait for the tank to fill |
 | `wrong network` | Lace is on a different network than `MIDNIGHT_NETWORK` |
-| `enroll: caller is not the issuer` | `CANDOR_ISSUER_KEY` in the issuer service ≠ key committed at deployment |
+| `enroll: caller is not the issuer` | `GOTIT_ISSUER_KEY` in the issuer service ≠ key committed at deployment |
 | `already submitted this epoch` | expected — one submission per member per epoch; issuer must call `nextEpoch` |

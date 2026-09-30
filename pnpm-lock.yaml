@@ -18,10 +18,10 @@ importers:
 
   apps/web:
     dependencies:
-      '@candor/contract':
+      '@gotit/contract':
         specifier: workspace:^
         version: link:../../packages/contract
-      '@candor/shared':
+      '@gotit/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@midnight-ntwrk/dapp-connector-api':
@@ -91,7 +91,7 @@ importers:
 
   packages/contract:
     dependencies:
-      '@candor/shared':
+      '@gotit/shared':
         specifier: workspace:*
         version: link:../shared
       '@midnight-ntwrk/compact-runtime':

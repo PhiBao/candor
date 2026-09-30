@@ -1,5 +1,5 @@
 /**
- * Candor issuer — the ONLY trusted component.
+* GotIt issuer — the ONLY trusted component.
  * - Verifies work email (Wave 1: code via console; production: email provider)
  * - Inserts member leaf into contract (Set<Bytes<32>>)
  * - Maintains append-only leaf log and per-epoch rate limits

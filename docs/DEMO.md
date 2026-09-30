@@ -1,11 +1,33 @@
-# Demo Guide — Wave 1
+# Demo Guide
 
-## One-command demo (no chain, no wallet)
+> **Wave 2 note:** the product was renamed Candor → GotIt. The contract file is still
+> `candor.compact` because its `candor:*` domain strings are frozen against the deployed
+> contract `e7cf6ffc…dd53d`. The Wave 1 flow below still works; the Wave 2 report surface is
+> described in [SPEC.md](SPEC.md) §9.
+
+## The report engine (no chain, no wallet — the Wave 2 deliverable)
+
+```bash
+pnpm --filter @gotit/shared exec tsx src/paygap.cli.ts --demo
+```
+
+Prints a full Art. 9 report from sample data, clearly labelled as not a filing. Highlights to
+show a judge:
+
+- **Intervals, not point estimates** — "Mean pay: $162,500–$187,500". Bucketed data only bounds
+  the truth, and the report says so.
+- **Suppression** — a 5-person category is withheld entirely, listed under "Suppressed
+  categories" with its reason.
+- **The 5% materiality call-out** — when a proven gap crosses the Art. 9(4) threshold, the
+  report states that a joint pay assessment may be triggered.
+- **Disclosure notes** travel with the output, including that participation is voluntary.
+
+## One-command demo (no chain, no wallet) — the Wave 1 flow
 
 ```bash
 pnpm install
 pnpm build
-pnpm --filter @candor/web preview --port 5173
+pnpm --filter @gotit/web preview --port 5173
 # or
 pnpm dev
 ```
@@ -28,7 +50,7 @@ Open http://localhost:5173
 ## With issuer backend
 
 ```bash
-pnpm --filter @candor/issuer dev
+pnpm --filter @gotit/issuer dev
 # issuer at http://localhost:8787
 # web dev server proxies /issuer → :8787, so same flow but issuer log is real
 curl http://localhost:8787/health
@@ -43,8 +65,8 @@ docker compose -f packages/contract/proof-server.yml up
 
 # 2. ensure Lace wallet on Preprod, funded with tDUST (faucet + registration wait)
 # 3. deploy
-pnpm --filter @candor/contract compile
-pnpm --filter @candor/contract build
+pnpm --filter @gotit/contract compile
+pnpm --filter @gotit/contract build
 # configure .env from .env.example, then run deploy script
 node --loader ts-node/esm packages/contract/src/deploy.ts preprod
 ```
@@ -53,11 +75,13 @@ Contract is `packages/contract/src/candor.compact`, compiled with compact 0.31.1
 
 ## Video checklist
 
-- Show public cut pages are readable with no wallet
-- Show locked cut + contribution unlocks it
-- Show verification step (email → code, issuer log)
-- Show bucketing (salary → bucket, coarse is privacy dial)
-- Show percentile moment (activation) + share
-- Show second submit rejected (nullifier) and note "one per epoch per verified person"
-- Mention trust boundary: issuer sees member, not submission link
-- Mention histogram-not-sum guarantee (differential-leak regression exists in tests)
+Lead with the report engine — it is the Wave 2 deliverable and needs no wallet:
+
+1. The Art. 9 report from sample data, and the interval-vs-point-estimate honesty
+2. A suppressed category and its stated reason
+3. The 5% materiality call-out
+4. Then the chain path: public pages readable with no wallet → contribute → proof generated
+   locally → histogram increments
+5. Second submit rejected (nullifier) — "one per period per verified person"
+6. Trust boundary: the issuer sees membership, never a submission linked to a person
+7. Histogram-not-sum guarantee (differential-leak regression exists in the tests)

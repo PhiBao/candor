@@ -7,8 +7,8 @@ import {
   bucketKey,
   cutKeyString,
   emptyHistogram,
-} from "@candor/shared";
-import { bytesToHex } from "@candor/shared";
+} from "@gotit/shared";
+import { bytesToHex } from "@gotit/shared";
 
 export type LedgerSnapshot = {
   members: string[]; // hex leaf 0x...
@@ -17,13 +17,26 @@ export type LedgerSnapshot = {
   epoch: string;
 };
 
-const LS_LEDGER = "candor:ledger:v1";
-const LS_SECRET = "candor:secret:v1";
-const LS_CONTRIBUTIONS = "candor:contribs:v1"; // local record of my submissions for UI
+const LS_LEDGER = "gotit:ledger:v1";
+const LS_SECRET = "gotit:secret:v1";
+const LS_CONTRIBUTIONS = "gotit:contribs:v1"; // local record of my submissions for UI
+
+// Renamed from "candor:*" in Wave 2. safeGet falls back to the pre-rename key
+// so a returning visitor keeps the same secret — which matters, because the
+// secret derives the on-chain nullifier. Generating a fresh one would look like
+// a brand-new member and could double-count a submission.
+const LEGACY_PREFIX = "candor:";
 
 // ---- Secret ----
 
-function safeGet(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }
+function safeGet(k: string): string | null {
+  try {
+    const now = localStorage.getItem(k);
+    if (now !== null) return now;
+    if (k.startsWith("gotit:")) return localStorage.getItem(LEGACY_PREFIX + k.slice("gotit:".length));
+    return null;
+  } catch { return null; }
+}
 function safeSet(k: string, v: string) { try { localStorage.setItem(k, v); } catch {} }
 function safeRemove(k: string) { try { localStorage.removeItem(k); } catch {} }
 
@@ -50,11 +63,13 @@ export function getSecretHex(): string | null {
 // Canonical leaf — identical to the circuit's derivation (hash-parity tested).
 // The hashing runtime (wasm) is loaded on demand so the landing page stays light.
 export async function leafForSecret(secret: Uint8Array): Promise<string> {
-  const { memberLeaf } = await import("@candor/shared/hash");
+  const { memberLeaf } = await import("@gotit/shared/hash");
   return "0x" + bytesToHex(memberLeaf(secret));
 }
 
 export async function nullifierForSecret(secret: Uint8Array): Promise<string> {
+  // "candor:nf:v1" is the DEPLOYED contract's nullifier domain string, not a
+  // brand string — it must match the circuit's persistentHash input exactly.
   const pad = new TextEncoder().encode("candor:nf:v1".padEnd(32, "\0"));
   const buf = new Uint8Array(pad.length + secret.length);
   buf.set(pad, 0);

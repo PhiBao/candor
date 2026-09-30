@@ -1,5 +1,5 @@
 {
-  "name": "@candor/contract",
+  "name": "@gotit/contract",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -26,7 +26,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@candor/shared": "workspace:*",
+    "@gotit/shared": "workspace:*",
     "@midnight-ntwrk/compact-runtime": "^0.16.0",
     "@midnight-ntwrk/midnight-js": "4.1.1",
     "@midnight-ntwrk/midnight-js-contracts": "4.1.1",

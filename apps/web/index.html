@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230a0a0b'/%3E%3Cpath d='M16 4a12 12 0 0 0 0 24 15 15 0 0 1 0-24z' fill='%23facc15'/%3E%3C/svg%3E" />
-    <title>Candor — Verified, unlinkable comp truth</title>
+    <title>GotIt — Provable pay gap reports</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <meta name="description" content="Candor: verified, unlinkable, aggregate-only compensation truth for crypto-native tech workers." />
+    <meta name="description" content="GotIt turns payroll data into a legally defensible pay gap report — provable against chain state, and exposing no individual employee. Built for EU Pay Transparency Directive reporting." />
   </head>
   <body>
-    <div id="root"><div data-candor-loader style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#0a0a0b;color:#f5f5f4;font-family:Inter,system-ui,sans-serif"><div style="text-align:center"><div style="width:32px;height:32px;border:3px solid #26262b;border-top-color:#facc15;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px"></div><div style="color:#a1a1aa">Loading Candor…</div><div style="color:#71717a;font-size:12px;margin-top:8px">If this stays, please reload or try Chrome</div></div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div>
+    <div id="root"><div data-gotit-loader style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#0a0a0b;color:#f5f5f4;font-family:Inter,system-ui,sans-serif"><div style="text-align:center"><div style="width:32px;height:32px;border:3px solid #26262b;border-top-color:#facc15;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px"></div><div style="color:#a1a1aa">Loading GotIt…</div><div style="color:#71717a;font-size:12px;margin-top:8px">If this stays, please reload or try Chrome</div></div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div>
     <script>
       // Never-blank guarantee: if the app bundle fails to boot (blocked WASM,
       // strict security modes, network hiccup), show a helpful fallback panel
@@ -25,9 +25,9 @@
           root.innerHTML =
             '<div style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#0a0a0b;color:#f5f5f4;font-family:Inter,system-ui,sans-serif">' +
             '<div style="max-width:560px;border:1px solid #26262b;border-radius:14px;padding:24px;background:#121214">' +
-            '<h2 style="margin:0 0 10px">Candor could not fully load</h2>' +
+            '<h2 style="margin:0 0 10px">GotIt could not fully load</h2>' +
             '<p style="color:#a1a1aa;line-height:1.5">' + reason + '</p>' +
-            '<p style="color:#a1a1aa;line-height:1.5">Candor uses WebAssembly for zero-knowledge proofs. If your browser (or an extension / enhanced-security mode) blocks it, allow WASM for this site or open the page in Chrome.</p>' +
+            '<p style="color:#a1a1aa;line-height:1.5">GotIt uses WebAssembly for zero-knowledge proofs. If your browser (or an extension / enhanced-security mode) blocks it, allow WASM for this site or open the page in Chrome.</p>' +
             '<button onclick="location.reload()" style="background:#facc15;color:#0a0a0b;border:0;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer">Reload</button>' +
             "</div></div>";
         }
@@ -42,7 +42,7 @@
         setTimeout(function () {
           var root = document.getElementById("root");
           if (!root) return;
-          var loader = root.querySelector('[data-candor-loader]');
+          var loader = root.querySelector('[data-gotit-loader]');
           if (loader || !root.hasChildNodes() || root.innerHTML.trim().length < 100) {
             fallback("The application took too long to start. Please check your connection and reload.");
           }

@@ -1,7 +1,37 @@
 # Changelog
 
-What's new in Candor, organized by Buildathon wave. Written for everyone — judges,
+What's new in GotIt, organized by Buildathon wave. Written for everyone — judges,
 contributors, and future team members.
+
+> **Renamed from *Candor* to *GotIt* for Wave 2.** A different Wave 1 project was also
+> called "Candor" (a proof-of-reserves product), so neither was findable. The old name
+> survives in git history, in the deployed contract's `candor:*` hash domain strings
+> (frozen — see README), and in the Fly app names (renaming an app destroys its URLs).
+
+## Wave 2 · v0.4.0 — A new name, a new buyer, a real deliverable (2026-09-30)
+
+- **Repositioned to a named buyer with a deadline.** We were pitching "private comp data to
+  crypto workers". Now: the Head of Total Rewards at a 150–2,500 person European company
+  who must publish gender pay gap statistics by **7 June 2027** under Directive (EU) 2023/970,
+  where an unjustified 5% gap triggers a joint pay assessment and the burden of proof shifts
+  to the employer.
+- **Built the Art. 9 report engine** (`packages/shared/src/paygap.ts`). Pure functions, no
+  I/O, so a third party can re-run them against on-chain state and get byte-identical output.
+  Emits the statistics the Directive actually names: mean and median gap, base versus
+  variable pay, proportion receiving variable pay, and quartile distribution.
+- **Means and gaps are intervals, not point estimates.** Bucketed data only bounds the truth.
+  Quartiles and counts are exact. The report says so on its face.
+- **The 5% materiality flag uses the bound nearest zero, not the midpoint.** A range of
+  [−33%, +50%] has midpoint +8.3%, but its sign is not even provable — flagging it would
+  trigger a joint pay assessment on a category that may be perfectly compliant.
+- **Suppression is enforced on both sides of every comparison.** Publishing one side of a
+  pay gap reveals the other by subtraction, so a one-sided row is a disclosure just as much
+  as a small cell.
+- **A pre-submission gate** (`pnpm check:submission`) that fails on empty or headings-only
+  sections, a jargon tagline, too few tags, and missing links or community fields. It
+  reports 21 errors against the real Wave 1 submission.
+- **Published the Wave 1 post-mortem** (`docs/WAVE1-POSTMORTEM.md`), including the recovered
+  judge data and the three self-inflicted defects that cost us the round.
 
 ## Wave 1 · v0.3.1 — Hosting paused after judging (2026-09-30)
 
@@ -11,7 +41,7 @@ contributors, and future team members.
 - **Nothing was lost.** The contract on Midnight Preprod
   (`e7cf6ffc…dd53d`) and all contributions made during the wave are untouched — only the
   servers that display them are off. Resume commands: `docs/DEPLOY.md` §8.
-- **Pitch deck shipped:** `docs/Candor-Pitch-Deck.pptx`.
+- **Pitch deck shipped:** `docs/GotIt-Pitch-Deck.pptx` (renamed to GotIt branding in Wave 2).
 
 ## Wave 1 · v0.3.0 — Live on Midnight Preprod (2026-08-28)
 

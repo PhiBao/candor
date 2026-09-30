@@ -15,7 +15,7 @@ export async function requestCode(email: string): Promise<{ demoCode: string }> 
   } catch {
     // Fallback: mock issuer when backend not running (hackathon demo without infra)
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    sessionStorage.setItem(`candor:mockCode:${email}`, code);
+    sessionStorage.setItem(`gotit:mockCode:${email}`, code);
     return { demoCode: code };
   }
 }
@@ -32,15 +32,15 @@ export async function confirmCode(email: string, code: string): Promise<void> {
     return;
   } catch (e: any) {
     // Mock fallback
-    const expected = sessionStorage.getItem(`candor:mockCode:${email}`);
+    const expected = sessionStorage.getItem(`gotit:mockCode:${email}`);
     if (expected && expected === code) {
-      sessionStorage.removeItem(`candor:mockCode:${email}`);
-      sessionStorage.setItem(`candor:mockVerified:${email}`, "1");
+      sessionStorage.removeItem(`gotit:mockCode:${email}`);
+      sessionStorage.setItem(`gotit:mockVerified:${email}`, "1");
       return;
     }
     // If issuer is actually down but no mock code, accept any 6-digit for demo
     if (!expected && /^\d{6}$/.test(code)) {
-      sessionStorage.setItem(`candor:mockVerified:${email}`, "1");
+      sessionStorage.setItem(`gotit:mockVerified:${email}`, "1");
       return;
     }
     throw e;
@@ -65,12 +65,12 @@ export async function enrollLeaf(email: string, secret: Uint8Array): Promise<str
   } catch (e: any) {
     // Network failure or already-enrolled (thrown above) — fall through to mock check
     if (e && /already/i.test(String(e.message ?? ""))) return leafHex;
-    const verified = (() => { try { return sessionStorage.getItem(`candor:mockVerified:${email}`); } catch { return null; } })();
+    const verified = (() => { try { return sessionStorage.getItem(`gotit:mockVerified:${email}`); } catch { return null; } })();
     if (verified) return leafHex;
     // If the issuer is reachable but rejected for real, surface it
     if (e && !String(e.message ?? "").includes("Failed to fetch")) throw e;
     // Offline / no mock verification — allow the flow to continue (demo)
-    try { sessionStorage.setItem(`candor:mockVerified:${email}`, "1"); } catch {}
+    try { sessionStorage.setItem(`gotit:mockVerified:${email}`, "1"); } catch {}
     return leafHex;
   }
 }

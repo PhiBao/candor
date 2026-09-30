@@ -1,5 +1,5 @@
 {
-  "name": "@candor/issuer",
+  "name": "@gotit/issuer",
   "version": "0.1.0",
   "type": "module",
   "scripts": {

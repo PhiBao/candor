@@ -1,5 +1,5 @@
 /**
- * Mock ledger mirroring candor.compact (v2) semantics for local demo & tests.
+ * Mock ledger mirroring candor.compact (the deployed Wave 1 contract) (v2) semantics for local demo & tests.
  * No Midnight node required. Mirrors:
  * - members: Set<leaf>, insertion issuer-gated on-chain (mock trusts caller)
  * - nullifiers: epoch-scoped — hash(domain, epoch, secret); nextEpoch re-opens

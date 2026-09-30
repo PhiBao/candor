@@ -1,5 +1,5 @@
 /**
- * Candor shared domain model
+ * GotIt shared domain model
  * - Cuts: role family × level × region (Wave 1: engineering only, no company)
  * - Buckets: USD total-comp histogram, 10 buckets
  * - Cut key hashing: mirrors on-chain persistentHash([cutKey string, bucket])

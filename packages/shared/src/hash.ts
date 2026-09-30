@@ -1,6 +1,14 @@
 /**
- * Canonical Candor hashing — the single source of truth for every value the
+ * Canonical GotIt hashing — the single source of truth for every value the
  * circuit also derives via Compact's `persistentHash`.
+ *
+ * The `candor:*` domain strings below are FROZEN. They are inputs to the hash
+ * derivations of the contract already deployed on Preprod at
+ * e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d, so changing
+ * them would make TS-derived values disagree with existing on-chain state and
+ * every prior member would be rejected as "not a member". The product was
+ * renamed Candor -> GotIt for Wave 2; these strings move to `gotit:*` only on a
+ * redeploy, under an explicit version bump. Do not "fix" them casually.
  *
  * The circuit computes:
  *   memberLeaf  = persistentHash([pad(32,"candor:member:v1"), secret])

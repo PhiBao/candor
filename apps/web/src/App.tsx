@@ -9,7 +9,7 @@ import {
   cutLabel,
   cutKeyString,
   hexToBytes,
-} from "@candor/shared";
+} from "@gotit/shared";
 import {
   loadLedger,
   saveLedger,
@@ -24,17 +24,17 @@ import {
   loadMyContribs,
 } from "./lib/ledger";
 import { requestCode, confirmCode, enrollLeaf } from "./lib/issuer";
-import type { CandorProviders } from "./lib/midnight";
-import { isLaceAvailable, getStoredContractAddress, setStoredContractAddress, getEffectiveIssuerKey, getBakedIssuerKey } from "./lib/session";
+import type { GotItProviders } from "./lib/midnight";
+import { isLaceAvailable, getStoredContractAddress, setStoredContractAddress, getEffectiveIssuerKey, getBakedIssuerKey, getStoredIssuerKey } from "./lib/session";
 import type { LedgerSnapshot } from "./lib/ledger";
 
 // live on-chain reads (lazy — wasm loads on demand)
 const chainReadLib = () => import("./lib/chainRead");
-import { bytesToHex } from "@candor/shared";
+import { bytesToHex } from "@gotit/shared";
 
 // wasm-heavy modules load on demand — the landing page renders without them
 const midnightLib = () => import("./lib/midnight");
-const hashLib = () => import("@candor/shared/hash");
+const hashLib = () => import("@gotit/shared/hash");
 
 type View = "browse" | "cut" | "contribute" | "result";
 
@@ -51,10 +51,10 @@ class ErrorBoundary extends React.Component<
       return (
         <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "var(--bg)", color: "var(--text)", fontFamily: "Inter, sans-serif" }}>
           <div style={{ maxWidth: 560, border: "1px solid var(--line)", borderRadius: 14, padding: 24, background: "var(--panel)" }}>
-            <h2 style={{ marginTop: 0 }}>Candor hit an unexpected error</h2>
+            <h2 style={{ marginTop: 0 }}>GotIt hit an unexpected error</h2>
             <p style={{ color: "var(--muted)", lineHeight: 1.5 }}>
               Reload the page to continue. If this keeps happening, your browser may have
-              blocked WebAssembly — which Candor needs for zero-knowledge proofs. Try
+              blocked WebAssembly — which GotIt needs for zero-knowledge proofs. Try
               disabling enhanced security / tracking prevention for this site, or open it in Chrome.
             </p>
             <button className="btn btn-primary" onClick={() => location.reload()}>Reload</button>
@@ -69,27 +69,27 @@ class ErrorBoundary extends React.Component<
 export default function App() {
   return (
     <ErrorBoundary>
-      <CandorApp />
+      <GotItApp />
     </ErrorBoundary>
   );
 }
 
-function CandorApp() {
+function GotItApp() {
   const [ledger, setLedger] = useState(() => loadLedger());
   const [view, setView] = useState<View>("browse");
   const [activeCutKey, setActiveCutKey] = useState<string>(() => allCuts()[0] ? cutKeyString(allCuts()[0]) : "");
   const [toast, setToast] = useState<string | null>(null);
-  const [chain, setChain] = useState<{ providers: CandorProviders } | null>(null);
+  const [chain, setChain] = useState<{ providers: GotItProviders } | null>(null);
   const [live, setLive] = useState<{ epoch: string; members: number; submissions: number; snapshot: LedgerSnapshot } | null>(null);
   const contractAddress = getStoredContractAddress();
 
   const refreshLive = async () => {
     if (!contractAddress) return;
     try {
-      const { readCandorState } = await chainReadLib();
-      setLive(await readCandorState(contractAddress));
+      const { readGotItState } = await chainReadLib();
+      setLive(await readGotItState(contractAddress));
     } catch (e: any) {
-      console.warn("[candor] live read unavailable, showing sample data:", e?.message ?? e);
+      console.warn("[gotit] live read unavailable, showing sample data:", e?.message ?? e);
       setLive(null);
     }
   };
@@ -99,10 +99,10 @@ function CandorApp() {
     return () => clearInterval(t);
   }, []);
   useEffect(() => {
-    (window as any).__candorRefreshLive = refreshLive;
+    (window as any).__gotitRefreshLive = refreshLive;
   }, []);
   useEffect(() => {
-    (window as any).__candorChain = chain;
+    (window as any).__gotitChain = chain;
   }, [chain]);
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [laceReady, setLaceReady] = useState(() => isLaceAvailable());
@@ -134,8 +134,8 @@ function CandorApp() {
 
   const connectChain = async () => {
     try {
-      const { connectCandor } = await midnightLib();
-      const providers = await connectCandor("preprod");
+      const { connectGotIt } = await midnightLib();
+      const providers = await connectGotIt("preprod");
       setChain({ providers });
       showToast("Lace connected — Preprod");
     } catch (e: any) {
@@ -164,7 +164,7 @@ function CandorApp() {
           <div className="brand">
             <div className="brand-mark">◐</div>
             <div>
-              <div style={{ lineHeight: 1, fontSize: 16 }}>Candor</div>
+              <div style={{ lineHeight: 1, fontSize: 16 }}>GotIt</div>
               <div className="small mono" style={{ color: "var(--muted)", marginTop: 2 }}>verified · unlinkable · aggregate-only</div>
             </div>
           </div>
@@ -224,7 +224,7 @@ function CandorApp() {
               Know what people like you <span style={{ color: "var(--accent)" }}>actually earn</span>.
             </h1>
             <p className="hero-copy">
-              Candor shows verified compensation distributions — never individual records. Only verified members can contribute, and no one (including us) can link a number back to you.
+              GotIt shows verified compensation distributions — never individual records. Only verified members can contribute, and no one (including us) can link a number back to you.
             </p>
             <div className="trust">
               <span className="pill"><b>Verified</b> · work-email check via issuer</span>
@@ -360,7 +360,7 @@ function CandorApp() {
             setActiveCutKey(cutKeyString(cut));
             setView("result");
             // store last result for percentile view
-            (window as any).__candorLast = { cut, bucket };
+            (window as any).__gotitLast = { cut, bucket };
           }}
           onDemoFallback={setDemoFallback}
           ledger={displayLedger}
@@ -398,11 +398,11 @@ function CandorApp() {
             <div className="card-pad" style={{ textAlign: "center" }}>
               <h2 style={{ margin: "6px 0 8px" }}>Connect your wallet to contribute</h2>
               <p className="small muted" style={{ lineHeight: 1.5 }}>
-                Candor verifies you before you submit — one verified person, one contribution per epoch. Your salary proof is generated on your device.
+                GotIt verifies you before you submit — one verified person, one contribution per epoch. Your salary proof is generated on your device.
               </p>
               {laceReady ? (
                 <div className="row" style={{ justifyContent: "center", marginTop: 14 }}>
-                  <button className="btn btn-primary" onClick={async () => { setShowGate(false); await connectChain(); if ((window as any).__candorChain) setView("contribute"); }}>Connect Lace</button>
+                  <button className="btn btn-primary" onClick={async () => { setShowGate(false); await connectChain(); if ((window as any).__gotitChain) setView("contribute"); }}>Connect Lace</button>
                   <button className="btn" onClick={() => setShowGate(false)}>Not now</button>
                 </div>
               ) : (
@@ -537,7 +537,7 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, onDemoFa
       snap = enrollLocal(snap, leafHex);
       saveLedger(snap);
 
-      const chainProps = (window as any).__candorChain as { providers: CandorProviders } | undefined;
+      const chainProps = (window as any).__gotitChain as { providers: GotItProviders } | undefined;
       const address = getStoredContractAddress();
       if (chainProps && address) {
         // REAL chain path: prove via Lace, submit on Preprod.
@@ -564,13 +564,13 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, onDemoFa
             } else if (/unlock|locked/i.test(msg)) {
               throw new Error("Lace is locked — click the Lace icon to unlock, then try Submit again.");
             } else {
-              console.warn("[candor] auto-enroll skipped:", msg.slice(0, 300));
+              console.warn("[gotit] auto-enroll skipped:", msg.slice(0, 300));
               // Hosted prover 403 or other transient — still try submit; the submit's
               // fallback will handle it and show a friendly message.
             }
           }
         } else {
-          console.warn("[candor] no issuer key available — skipping on-chain enroll, will try submit anyway");
+          console.warn("[gotit] no issuer key available — skipping on-chain enroll, will try submit anyway");
         }
         let chainSucceeded = false;
         try {
@@ -584,7 +584,7 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, onDemoFa
           const msg = String(e?.message ?? e);
           const isProverDown = /403|Failed to fetch|Load failed|proof-server|prove/i.test(msg);
           if (isProverDown) {
-            console.warn("[candor] hosted prover unavailable, entering demo mode:", msg.slice(0, 300));
+            console.warn("[gotit] hosted prover unavailable, entering demo mode:", msg.slice(0, 300));
             onDemoFallback?.(true);
             await new Promise((r) => setTimeout(r, 900));
             const res = await submitLocal(snap, secret, selectedCut, bucket);
@@ -603,7 +603,7 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, onDemoFa
         if (chainSucceeded) {
           onDemoFallback?.(false);
           // Refresh live data after a real submit so the next browse shows the new state
-          try { await (window as any).__candorRefreshLive?.(); } catch {}
+          try { await (window as any).__gotitRefreshLive?.(); } catch {}
         }
       } else {
         // demo path: simulated proving, mock ledger
@@ -715,7 +715,7 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, onDemoFa
                 </div>
                 <div className="small muted" style={{ marginTop: 8 }}>
                     {(import.meta as any).env?.VITE_HOSTED_PROVER === "true"
-                      ? "Beta hosted demo: proof generation is routed through a hosted proving service over TLS. For full on-device privacy, run Candor locally — see the repo docs."
+                      ? "Beta hosted demo: proof generation is routed through a hosted proving service over TLS. For full on-device privacy, run GotIt locally — see the repo docs."
                       : "Your device generates the zero-knowledge proof — your exact salary never leaves this browser."}
                   </div>
               </>
@@ -728,7 +728,7 @@ function ContributeWizard({ cut, cuts, onCutChange, onClose, onSuccess, onDemoFa
 }
 
 function ResultView({ ledger, onBack, onBrowse }: { ledger: any; onBack: () => void; onBrowse: () => void }) {
-  const last = (window as any).__candorLast as { cut: any; bucket: number } | undefined;
+  const last = (window as any).__gotitLast as { cut: any; bucket: number } | undefined;
   const cut = last?.cut;
   const bucket = last?.bucket;
   const pct = cut && bucket != null ? percentileForBucket(ledger, cut, bucket) : null;
@@ -777,7 +777,7 @@ function ResultView({ ledger, onBack, onBrowse }: { ledger: any; onBack: () => v
             <div className="row" style={{ marginTop: 14 }}>
               <button className="btn btn-primary" onClick={onBack}>View this cut</button>
               <button className="btn" onClick={onBrowse}>Browse all cuts</button>
-              <button className="btn btn-ghost" onClick={() => { if (navigator.share) navigator.share({ title: "Candor", text: `I'm in the ${pct}th percentile for ${cutLabel(cut)} — verified on Candor.`, url: location.href }); else { navigator.clipboard.writeText(`I'm in the ${pct}th percentile for ${cutLabel(cut)} — verified on Candor.`); } }}>Share percentile</button>
+              <button className="btn btn-ghost" onClick={() => { if (navigator.share) navigator.share({ title: "GotIt", text: `I'm in the ${pct}th percentile for ${cutLabel(cut)} — verified on GotIt.`, url: location.href }); else { navigator.clipboard.writeText(`I'm in the ${pct}th percentile for ${cutLabel(cut)} — verified on GotIt.`); } }}>Share percentile</button>
             </div>
 
             <div className="small muted" style={{ marginTop: 10 }}>
@@ -796,15 +796,13 @@ function OperatorPanel({
   onToast,
   onAddress,
 }: {
-  chain: { providers: CandorProviders } | null;
+  chain: { providers: GotItProviders } | null;
   onClose: () => void;
   onToast: (msg: string) => void;
   onAddress: (addr: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [issuerKeyHex, setIssuerKeyHex] = useState<string>(() => {
-    try { return localStorage.getItem("candor:issuerKey") ?? getBakedIssuerKey() ?? ""; } catch { return getBakedIssuerKey() ?? ""; }
-  });
+  const [issuerKeyHex, setIssuerKeyHex] = useState<string>(() => getStoredIssuerKey() ?? "");
   const [leafHex, setLeafHex] = useState<string>("");
   const [enrollEmail, setEnrollEmail] = useState<string>("");
   const address = getStoredContractAddress();
@@ -813,15 +811,15 @@ function OperatorPanel({
   // Auto-save baked key on first load so the operator never has to paste
   useEffect(() => {
     const baked = getBakedIssuerKey();
-    if (baked && !localStorage.getItem("candor:issuerKey")) {
-      try { localStorage.setItem("candor:issuerKey", baked); if (!issuerKeyHex) setIssuerKeyHex(baked); } catch {}
+    if (baked && !getStoredIssuerKey()) {
+      try { localStorage.setItem("gotit:issuerKey", baked); if (!issuerKeyHex) setIssuerKeyHex(baked); } catch {}
     }
   }, []);
 
   const saveIssuerKey = () => {
     const clean = issuerKeyHex.replace(/^0x/, "").trim();
     if (!/^[0-9a-fA-F]{64}$/.test(clean)) { onToast(`issuer key must be 64 hex chars (got ${clean.length} chars)`); return; }
-    localStorage.setItem("candor:issuerKey", clean);
+    try { localStorage.setItem("gotit:issuerKey", clean); } catch {}
     onToast("Issuer key saved (local only)");
   };
 
@@ -831,13 +829,13 @@ function OperatorPanel({
     if (!keyValid) { onToast(`issuer key invalid (${clean.length} chars) — paste 64 hex chars and Save`); return; }
     setBusy(true);
     try {
-      const { deployCandor } = await midnightLib();
-      const deployed = await deployCandor(chain.providers, hexToBytes(clean));
+      const { deployGotIt } = await midnightLib();
+      const deployed = await deployGotIt(chain.providers, hexToBytes(clean));
       const addr = (deployed.deployTxData as any).public?.contractAddress;
       if (addr) { onAddress(addr); onToast(`Deployed at ${addr}`); }
       else onToast("Deployed — check Lace for the address");
     } catch (e: any) {
-      console.error("[candor] deploy failed — full error:", e, "cause:", e?.cause);
+      console.error("[gotit] deploy failed — full error:", e, "cause:", e?.cause);
       onToast(e?.message ?? "deploy failed");
     } finally { setBusy(false); }
   };
@@ -855,7 +853,7 @@ function OperatorPanel({
       });
       onToast("Member enrolled on-chain");
     } catch (e: any) {
-      console.error("[candor] enroll failed — full error:", e, "cause:", e?.cause);
+      console.error("[gotit] enroll failed — full error:", e, "cause:", e?.cause);
       onToast(e?.message ?? "enroll failed");
     } finally { setBusy(false); }
   };

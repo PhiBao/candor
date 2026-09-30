@@ -5,8 +5,8 @@ import {
   dummyContractAddress,
 } from "@midnight-ntwrk/compact-runtime";
 import { Contract } from "./managed/candor/contract/index.js";
-import { witnesses, createPrivateState, type CandorPrivateState } from "./witnesses.js";
-import { memberLeaf, issuerCommitment, cutKeyBytes, bytesToHex } from "@candor/shared/hash";
+import { witnesses, createPrivateState, type GotItPrivateState } from "./witnesses.js";
+import { memberLeaf, issuerCommitment, cutKeyBytes, bytesToHex } from "@gotit/shared/hash";
 import {
   createMockLedger,
   enrollMember,
@@ -14,8 +14,8 @@ import {
   nextEpoch,
   histogramForCut,
   assertNoExactLeak,
-} from "@candor/shared/mockLedger";
-import { bucketForSalary, cutKeyString, type Cut } from "@candor/shared";
+} from "@gotit/shared/mockLedger";
+import { bucketForSalary, cutKeyString, type Cut } from "@gotit/shared";
 
 // ---- harness ---------------------------------------------------------------
 // Runs the GENERATED contract circuits against a simulated ContractState — no
@@ -30,7 +30,7 @@ function secret32(n: number): Uint8Array {
   return new Uint8Array(32).fill(n);
 }
 
-function nextCtx(ps: CandorPrivateState, prev: { context: { currentQueryContext: { state: unknown } } }) {
+function nextCtx(ps: GotItPrivateState, prev: { context: { currentQueryContext: { state: unknown } } }) {
   return createCircuitContext(dummyContractAddress(), COIN_PK, prev.context.currentQueryContext.state as any, ps);
 }
 
@@ -39,10 +39,10 @@ function nextCtx(ps: CandorPrivateState, prev: { context: { currentQueryContext:
  * ledger state is returned inside `results.context`. The harness therefore
  * threads the returned state through every call.
  */
-function deployCandor(userSecret: Uint8Array, issuerKey: Uint8Array) {
+function deployGotIt(userSecret: Uint8Array, issuerKey: Uint8Array) {
   const ps = createPrivateState(userSecret);
   const issuerPs = createPrivateState(userSecret, issuerKey);
-  const contract = new Contract<CandorPrivateState>(witnesses);
+  const contract = new Contract<GotItPrivateState>(witnesses);
   const res = contract.initialState(createConstructorContext(ps, COIN_PK), issuerCommitment(issuerKey));
   let state = res.currentContractState;
 
@@ -63,9 +63,9 @@ function deployCandor(userSecret: Uint8Array, issuerKey: Uint8Array) {
 
 // ---- generated-circuit tests ----------------------------------------------
 
-describe("candor circuits (generated Compact, off-chain simulation)", () => {
+describe("gotit circuits (generated Compact, off-chain simulation)", () => {
   it("happy path: enroll → submit increments exactly one bucket by 1", () => {
-    const c = deployCandor(secret32(42), secret32(1));
+    const c = deployGotIt(secret32(42), secret32(1));
 
     c.asIssuer((ctx) => c.contract.impureCircuits.enroll(ctx, memberLeaf(secret32(42))));
     c.asUser((ctx) => c.contract.impureCircuits.submit(ctx, KEY, 5n));
@@ -79,7 +79,7 @@ describe("candor circuits (generated Compact, off-chain simulation)", () => {
   });
 
   it("rejects double-submit in same epoch, allows again after nextEpoch", () => {
-    const c = deployCandor(secret32(42), secret32(1));
+    const c = deployGotIt(secret32(42), secret32(1));
 
     c.asIssuer((ctx) => c.contract.impureCircuits.enroll(ctx, memberLeaf(secret32(42))));
     c.asUser((ctx) => c.contract.impureCircuits.submit(ctx, KEY, 5n));
@@ -102,7 +102,7 @@ describe("candor circuits (generated Compact, off-chain simulation)", () => {
   });
 
   it("rejects non-member submit", () => {
-    const c = deployCandor(secret32(42), secret32(1));
+    const c = deployGotIt(secret32(42), secret32(1));
     c.asIssuer((ctx) => c.contract.impureCircuits.enroll(ctx, memberLeaf(secret32(42))));
 
     const outsiderPs = createPrivateState(secret32(99));
@@ -120,7 +120,7 @@ describe("candor circuits (generated Compact, off-chain simulation)", () => {
   });
 
   it("rejects out-of-range bucket", () => {
-    const c = deployCandor(secret32(42), secret32(1));
+    const c = deployGotIt(secret32(42), secret32(1));
     c.asIssuer((ctx) => c.contract.impureCircuits.enroll(ctx, memberLeaf(secret32(42))));
     expect(() => c.asUser((ctx) => c.contract.impureCircuits.submit(ctx, KEY, 10n))).toThrow(
       /bucket out of range/,
@@ -128,7 +128,7 @@ describe("candor circuits (generated Compact, off-chain simulation)", () => {
   });
 
   it("rejects enroll and nextEpoch from a non-issuer key", () => {
-    const c = deployCandor(secret32(42), secret32(1));
+    const c = deployGotIt(secret32(42), secret32(1));
 
     const fakePs = createPrivateState(secret32(42), secret32(77)); // wrong issuer key
     expect(() =>
@@ -158,16 +158,16 @@ describe("candor circuits (generated Compact, off-chain simulation)", () => {
   it("hash parity: TS-derived leaf/commit must match circuit-derived values", () => {
     // If shared/src/hash.ts pad/hash semantics drift from the circuit, the
     // enroll leaf won't be recognized and submit will fail with "not a member".
-    const c = deployCandor(secret32(42), secret32(1));
+    const c = deployGotIt(secret32(42), secret32(1));
     c.asIssuer((ctx) => c.contract.impureCircuits.enroll(ctx, memberLeaf(secret32(42))));
     expect(() => c.asUser((ctx) => c.contract.impureCircuits.submit(ctx, KEY, 5n))).not.toThrow();
   });
 
   it("hash parity: TS issuerCommitment is accepted as the constructor commit", () => {
-    // deployCandor itself passes issuerCommitment(issuerKey) to initialState and
+    // deployGotIt itself passes issuerCommitment(issuerKey) to initialState and
     // enroll authenticates against it — reaching here without "not the issuer"
     // proves TS and circuit issuer-commit derivations agree.
-    const c = deployCandor(secret32(42), secret32(1));
+    const c = deployGotIt(secret32(42), secret32(1));
     c.asIssuer((ctx) => c.contract.impureCircuits.enroll(ctx, memberLeaf(secret32(42))));
     expect(bytesToHex(memberLeaf(secret32(42))).length).toBe(64);
   });
@@ -175,7 +175,7 @@ describe("candor circuits (generated Compact, off-chain simulation)", () => {
 
 // ---- mock-ledger tests (mirror v2 semantics) --------------------------------
 
-describe("candor mock ledger", () => {
+describe("gotit mock ledger", () => {
   it("happy path increments histogram", () => {
     const ledger = createMockLedger();
     const secret = secret32(7);

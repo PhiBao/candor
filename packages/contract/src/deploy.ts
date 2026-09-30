@@ -1,10 +1,10 @@
 /**
- * Deployment script for Candor on Midnight.
+ * Deployment script for GotIt on Midnight.
  * Mirrors the pattern from docs/deploy-and-operate.md and midnight-rps-sample-app pkgs/cli.
  * Requires: proof server on :6300, funded wallet with DUST, indexer endpoints.
  *
  * Usage:
- *   pnpm --filter @candor/contract deploy:preprod
+ *   pnpm --filter @gotit/contract deploy:preprod
  *   (or: node --loader ts-node/esm src/deploy.ts preprod)
  */
 import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
@@ -45,9 +45,9 @@ async function main() {
   // Providers setup is intentionally verbose and mirrors docs to avoid hidden magic.
   // In production, privateStateProvider password must be derived, not hardcoded.
   const privateStateProvider = levelPrivateStateProvider({
-    privateStateStoreName: "candor-private-state",
-    signingKeyStoreName: "candor-signing-keys",
-    privateStoragePasswordProvider: () => process.env.CANDOR_STATE_PASSWORD ?? "Candor-Demo-2026!!!",
+    privateStateStoreName: "gotit-private-state",
+    signingKeyStoreName: "gotit-signing-keys",
+    privateStoragePasswordProvider: () => process.env.GOTIT_STATE_PASSWORD ?? "GotIt-Demo-2026!!!",
     accountId: process.env.MIDNIGHT_WALLET_ADDRESS ?? "demo-account",
   });
 
@@ -68,7 +68,7 @@ async function main() {
   );
   const deployed = await deployContract(providers, {
     compiledContract: compiled,
-    privateStateId: "candorPrivateState",
+    privateStateId: "gotitPrivateState",
     initialPrivateState: { secret: new Uint8Array(32) },
     // constructor arg: issuerCommit
     constructorArgs: { issuerCommit: new Uint8Array(32) },

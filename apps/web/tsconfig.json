@@ -16,10 +16,10 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "@candor/shared": [
+      "@gotit/shared": [
         "../../packages/shared/src/index.ts"
       ],
-      "@candor/shared/*": [
+      "@gotit/shared/*": [
         "../../packages/shared/src/*"
       ]
     },

@@ -1,106 +1,215 @@
-# Candor — Product Specification (Wave 1)
+# GotIt — Product Specification (Wave 2)
+
+> Supersedes the Wave 1 spec, which targeted crypto-native workers. That positioning lost
+> Wave 1 (0 of 159) for want of a named buyer — see [WAVE1-POSTMORTEM.md](WAVE1-POSTMOSTEM.md).
+> The technical core is unchanged and still live; the buyer, the surface and the reporting
+> model are what moved.
 
 ## 1. Core user
 
-**Crypto-native engineers, designers, and PMs** — 1–10 years experience, remote, compensated in fiat + tokens. They already use wallets and can tolerate a local proof server, which converts Midnight's hardest constraint into a beachhead filter. Their comp data is most poorly served by Levels.fyi/Glassdoor (token grants, vesting, global remote). Reachable via Midnight/Cardano communities, crypto Twitter, Farcaster, DAO forums. Expansion to broader remote tech in Wave 3 as proving UX improves.
+**The Head of Total Rewards (or People Analytics / Compliance) at a 150–2,500 person
+European company.** They own the gender pay gap filing that lands on their desk every June,
+they are measured on it, and today they produce it by exporting a spreadsheet and deleting
+the rows with three people in them.
+
+Secondary user, and the one who supplies the data: **the employee**, who is legally
+individually identifiable in any small enough group and has every reason to refuse.
+
+The employee is not a "beachhead segment" to be courted. They are a counterparty whose
+consent we cannot manufacture, and the whole product has to be designed around the fact that
+participation is voluntary.
 
 ## 2. Job-to-be-done
 
-> "When I'm about to negotiate — offer, review, raise, or deciding to leave — I want to know what people like me actually earn, from data I can trust, without exposing myself, so I can ask for the right number."
+> "When the pay gap report is due, I want to publish a number I can defend to a works council,
+> an equality body and eventually a court, without exposing any individual employee — because
+> the burden of proof is now mine, and a spreadsheet is not evidence."
 
-Functional: defensible number. Emotional: stop feeling quietly exploited. Social: don't become the person who leaked comp.
+Functional: a filing that survives scrutiny. Emotional: not being the person who signed it.
+Social: not being the person who leaked someone's salary.
 
-## 3. Main user journey
+## 3. Why ZK, specifically
 
-**Reader (no wallet, no proof server, free):** lands on cut page `engineering:L5:remote-us` via search/shared link → sees verified distribution with “N verified” badge → if cut is locked (k<5), prompted to contribute.
+The regulation creates a genuine conflict: **publish group statistics** (Art. 9) versus
+**protect individuals** (GDPR data minimisation, Art. 5(1)(c)). Aggregate statistics
+re-identify people at small group sizes — the well-known failure of the "anonymised" CSV, and
+the reason a published quartile table for a 12-person team is a privacy incident, not a
+compliance win.
 
-**Contributor (ZK flow):** Verify work email → code confirmation (client generates 32-byte secret, stores locally; issuer inserts leaf, never sees secret) → Connect Lace (Preprod) → Describe: level, region, comp (one question per screen) → Submit: client derives bucket, builds membership proof + epoch nullifier, proves locally (Docker proof server :6300), submits tx → Result: “Recorded. Nobody can link this to you.” + percentile.
+Three things must be simultaneously true, and no spreadsheet satisfies more than one:
 
-## 4. Activation moment
+| | Proves the data came from real employees | Proves nobody was double-counted | No individual is identifiable |
+|---|---|---|---|
+| Payroll export | ✗ | ✗ | ✗ (it *is* the records) |
+| HR survey | ✗ gameable | ✗ | ✗ uneven participation |
+| Employer attestation | ✗ it's a promise | ✗ | depends on trust |
+| **GotIt** | **✓** | **✓** | **✓ enforced in-circuit** |
 
-**“You’re paid in the 34th percentile for your cut”** — delivered instantly after submission. Personal, emotional, actionable, obtainable only by contributing. Resolves the anxiety that drove the visit at peak attention. Secondary activation for readers: first time they see a verified distribution for their own cut with enough contributors to believe it.
+Critically, the employee must also be able to verify *their own* input was included and
+counted exactly once, without the employer learning who they are. That last property is what
+makes voluntary participation rational, and it is the thing only ZK gives us.
 
-## 5. Retention loop
+## 4. Main user journey
 
-Cryptographic, not cosmetic: epoch-scoped nullifier = one submission per verified person per epoch (quarter). Next epoch data is stale, re-eligible.
+**Employee (contributor):** verify work email → code confirmation (32-byte secret generated
+and stored on their device; the issuer inserts a leaf and never sees the secret) → connect
+Lace → enter job category, gender, base pay, variable pay (one question per screen) → the
+client derives buckets, builds the membership proof and epoch nullifier, proves locally →
+submit → "Recorded. Nobody can link this to you."
 
-- Natural triggers align with epochs: reviews, raises, offers, job changes
-- Pull: “7 new verified submissions in your cut — your percentile moved 62nd → 48th”
-- Give-to-get: contributing unlocks deeper cuts for that epoch
-- Compounding: more contributors → more cuts clear k → more value → more reason to return
+**Compliance officer (reader):** open the report for a period → see each job category's
+headcount, mean/median gap, base-vs-variable split, quartile boundaries, and any gap flagged
+at the 5% Art. 9(4) threshold → download the markdown/JSON artifact with its disclosure notes
+→ send the verification link to a works council or auditor.
 
-## 6. Product differentiation
+**Third party (verifier):** open the verification page with the report hash → see that it
+matches chain state, that every participant was an attested employee, and that no cell below
+the anonymity threshold was published — without learning any individual's pay.
 
-- Levels.fyi/Glassdoor: unverifiable self-report, astroturfable
-- Blind: verifies work email but ties posts to persistent handle
-- Pave/OpenComp: verified but employer-owned, not worker-facing
-- **Candor: verified + unlinkable + worker-facing**
+## 5. Activation moment
 
-Gap is verified and unlinkable together — without ZK they are mutually exclusive. Secondary edge: real crypto-comp modeling (token grants, vesting, stablecoin salaries) in later waves.
+**"Your report is ready, and here's the link you can send to your works council."** The
+employee-side activation is secondary: *"Your number is in. Here's what it says about your
+category."*
 
-## 7. Interface model
+The primary moment moved deliberately. In Wave 1 it was a percentile — a personal payoff for a
+worker. In Wave 2 it is a *defensible artifact*, because that is what the buyer is measured
+on.
 
-Not a dashboard. Behavior-driven:
+## 6. Retention loop
 
-- **Public read surface: one page per cut.** Single dominant object — distribution. Shareable, linkable, indexable. (Vite + React, static rendering ready for Next.js ISR)
-- **Contribute surface: 4-step wizard, one question per screen**, progressive disclosure, plain-language privacy note at each cryptographic step
-- **Percentile result: full-screen moment**, designed to screenshot/share
-- No sidebar, settings page, data tables, charts wall, admin panel, accounts
+Cryptographic, not cosmetic: the epoch-scoped nullifier is one submission per verified person
+per reporting period. A new period makes everyone re-eligible.
+
+- Natural triggers align with the calendar: annual reporting, compensation review cycles
+- Pull: "a gap in Support crossed 5% — a joint pay assessment may be triggered"
+- Give-to-get: contributing keeps your category publishable; a category that drops below the
+  anonymity threshold goes dark for everyone in it
+- Compounding: more employees → more categories clear the threshold → more useful report
+
+## 7. Product differentiation
+
+- Equilux (Wave 1, funded): same problem, framed as EU compliance, 12 circuits. Its judge
+  wrote that it *"has to become a plugin for [Workday, Personio, Big Four] rather than a
+  standalone app."* Wave 3 answers that with a read-only payroll connector.
+- Existing payroll / survey tools: unauthenticated or gameable, and they publish or protect,
+  never both.
+- **GotIt: proven, unlinkable, and suppressible** — the suppression is enforced on-chain, so
+  the employer cannot leak a small cell even by accident or by policy override.
+
+## 8. Interface model
+
+Not a dashboard. Three surfaces, each with a single dominant object:
+
+- **Report surface:** one page per period. The object is the report — the thing that gets
+  filed. Shareable, linkable, indexable.
+- **Verification surface:** one page per report hash. The object is the proof. No wallet.
+- **Contribute surface:** 4-step wizard, one question per screen, plain-language privacy note
+  at each cryptographic step.
 
 No accounts by design — no identity to leak.
 
-## 8. MVP scope and non-goals
+## 9. Reporting model (the Wave 2 deliverable)
 
-**In:** one epoch (Q1-2026), USD only, engineering family L3–L7, cuts = role × level × region (no company, coarse for k≥5), histogram buckets (10), epoch nullifier, k-gate, issuer service, Vite read pages + wizard + percentile moment, Lace on Preprod, off-chain circuit tests including negative + differential-leak regression, Preprod deployment, demo video, seed plan for one community.
+Directive (EU) 2023/970 Art. 9, first reports due **7 June 2027** for employers with 150+
+workers (250+ annually; 150–249 every three years; 100–149 from 2031):
 
-**Out:** multi-issuer/decentralized attestation, zkEmail, employer product, monetization, equity/vesting valuation, multi-currency, non-engineering roles, mobile (Kuira candidate for Wave 3), notifications infra, user accounts.
+| Art. 9(1) requirement | GotIt output | Exactness |
+|---|---|---|
+| (a) gender pay gap | interval | bounded |
+| (b) gap in complementary/variable components | interval, per component | bounded |
+| (c) median gender pay gap | interval | bounded |
+| (d) median gap, variable components | interval | bounded |
+| (e) proportion receiving variable pay | exact | exact |
+| quartile distribution | exact boundaries | exact |
+| headcounts | exact | exact |
 
-## 9. Architecture
+Two honesty rules that the code enforces rather than the docs:
+
+- **Means and gaps are intervals.** Bucketed data only bounds the true value. Reporting a
+  point estimate would be a rounding error dressed as a statistic.
+- **Materiality uses the bound nearest zero, not the midpoint.** A range of [−33%, +50%] has
+  midpoint +8.3%, but the sign is not provable. Flagging it would trigger a joint pay
+  assessment on a category that may be compliant, so only a *proven* disparity of 5% counts.
+
+**Disclosure control is two-sided.** Publishing one side of a comparison reveals the other by
+subtraction, so a row is withheld unless *both* groups clear the threshold.
+
+## 10. MVP scope and non-goals
+
+**In (Wave 2):** the report engine (`packages/shared/src/paygap.ts`, done — 38 tests), the
+report surface, the verification page, suppression tuned to the Directive's category model,
+employer-facing flow, hosted environment restored so the deliverable URL resolves.
+
+**Out (Wave 2):** HRIS integration, zkEmail, multi-entity federation, mobile, direct filing
+with the authority, equity/vesting valuation, non-EU regimes (US EO 14173 and state laws are
+Wave 3 — note EO 14173 is back in force after the Fourth Circuit vacated its injunction in
+Feb 2026, so that market re-opened).
+
+## 11. Architecture
 
 ```
-packages/contract   Compact candor.compact → managed/contract + keys + zkir (0.31.1 / lang 0.23)
-packages/shared     cuts, buckets, hashing, k-gate, mockLedger
+packages/contract   Compact source + generated TS + vitest circuit suite (13 tests)
+packages/shared     cuts, buckets, hashing, k-gate, Art. 9 report engine (38 tests)
 packages/issuer     email code → leaf insertion, append-only log, rate limits
-apps/web            Vite + React: public cut grid + wizard + percentile
+apps/web            Vite + React: report surface + verification page + wizard
 ```
 
-**Ledger:** `members: Set<Bytes<32>>`, `nullifiers: Set<Bytes<32>>`, `histogram: Map<Bytes<32>, Uint<64>>` (key = persistentHash([cutKey, bucket])), `epochCount: Map<Bytes<1>, Uint<64>>` (readable epoch cell), `issuer: Bytes<32>` (commitment; `enroll`/`nextEpoch` are issuer-gated on-chain).
+**Ledger (unchanged, live on Preprod at `e7cf6ffc…dd53d`):** `members: Set<Bytes<32>>`,
+`nullifiers: Set<Bytes<32>>` (epoch-scoped), `histogram: Map<Bytes<32>, Uint<64>>`,
+`epochCount: Map<Bytes<1>, Uint<64>>`, `issuer: Bytes<32>`.
 
-**Circuit submit:** leaf = persistentHash([pad(32,"candor:member:v1"), secret]), check members, nf = persistentHash([pad(32,"candor:nf:v1"), epoch, secret]) with epoch read from ledger, check nullifiers, bKey = persistentHash([cutKey, bucket]), histogram increment. Only cutKey, bucket disclosed.
+> The `candor:*` domain strings are **frozen** — they are inputs to the deployed contract's
+> hash derivations. The product was renamed to GotIt; these move only on redeploy.
 
-**Trust boundary:** issuer learns who is a member, cannot link submission to member (never sees secret). Wave 1 discloses leaf for Set membership; Wave 2 replaces with HistoricMerkleTree + merkleTreePathRoot for private membership. Nullifier is epoch-scoped and unlinkable (issuer never sees secret).
+**Trust boundary:** the issuer learns who is a member and cannot link a submission to a
+member, because it never sees the secret that derives the nullifier. Wave 1 discloses the leaf
+for `Set` membership; Wave 3 replaces that with `HistoricMerkleTree` + `merkleTreePathRoot`
+so no company learns its own employees' salaries even to verify them.
 
-**Read path:** indexer GraphQL → ledger(state.data) → static cut pages. No wallet.
+## 12. Validation metrics
 
-## 10. Validation metrics
+Thesis: a compliance officer will prefer a report they can defend to one they can produce.
 
-Thesis: workers will contribute verified comp data if unlinkability is credible and will return.
+- **Report generated without a manual spreadsheet step** — the primary success signal
+- **Categories cleared by participation** — is voluntary coverage enough to be publishable?
+- **Verification page used by a third party** — does anyone outside the company actually check?
+- **Verbatim: would you file this instead of your spreadsheet?** — the question that matters
+- **Pilot LOIs signed** — 3–5 European companies by 19 Oct
 
-- **Contribution conversion** (verify started → on-chain submit): target >40% — the number that matters for ZK friction + trust story
-- **Cuts clearing k≥5** — cold-start beatable?
-- **Epoch-2 return rate** target >30%
-- **Locked-cut read→contribute rate** — give-to-get
-- **Organic shares** of percentile moments
+Falsifiers: officers like the concept but won't move a payroll process for it → the HRIS
+connector is the whole product, not a Wave 3 nice-to-have; coverage too low to clear
+thresholds → the category model is wrong, not the cryptography; verifiers find the artifact
+insufficient evidence → the report needs a regulator-accepted format.
 
-Falsifiers: verification starts but no submits → proof-server friction fatal; heavy reads no contributions → unlinkability claim not believed; no cut reaches k → beachhead too broad.
+## 13. Security and failure considerations
 
-Qualitative: 10 interviews — “do you believe we can’t link this to you, and why?”
+**Privacy:** suppression enforced on both sides of every comparison; the differential-leak
+regression test asserts that summing published buckets never reveals an exact salary
+(the histogram is not a sum); participation is voluntary and participation counts are shown
+on the report's face so incomplete coverage is visible rather than hidden; secret loss is
+unrecoverable by design and must surface in the UI; proof server must be user-local, hosted
+proving permanently rejected as a privacy guarantee.
 
-## 11. Security and failure considerations
+**Integrity:** the issuer is the residual trusted component and can mint fake members —
+mitigated by a public append-only leaf log and per-period caps; full removal is Wave 3. ZK
+proves a bucket range, not honesty, so the guarantee is *one submission per verified person
+per period*, not truth.
 
-**Privacy:** histogram buckets not sum (differential leak: sum deltas reveal exact salaries — regression test asserts delta is exactly one bucket increment); k-anonymity gate; timing correlation (verification and submission decoupled, documented residual risk); nullifier domain separation and epoch-scoping (epoch read from ledger state; Wave 2 adds contract id); secret loss is unrecoverable by design (must surface in UI); proof server must be user-local, hosted proving permanently rejected.
-
-**Integrity:** employer astroturfing blocked by verified membership + one nullifier per epoch (Glassdoor weakness fixed); issuer compromise can mint fake members and stuff histogram — mitigate with public append-only leaf log + per-epoch caps, decentralization is Wave 2/3 primary goal; truthfulness — ZK proves bucket range, not honesty — guarantee is one submission per verified person, not truth (still stronger than incumbents), outlier detection over time.
-
-**Failure states:** proof server down (show docker command), insufficient DUST (explain faucet + registration wait), wrong network (detect prefix, prompt switch to Preprod), indexer lag (staleness indicator), nullifier already spent (distinguish “already submitted this epoch” vs error).
+**Legal:** GotIt produces the auditable artifact a filing is built from. It does not file, and
+it is not legal advice. Member States transpose the Directive independently and several have
+delayed to 1 January 2027, so thresholds and formats vary by country — the report labels which
+regime it targets.
 
 ---
 
 ### Wave plan
 
-**Wave 1:** narrow complete flow above, deployed to Preprod, demo video, seeded community.
+**Wave 1 (done, 0 points):** narrow worker-facing flow, live on Preprod, 7 of 159 funded.
+Full analysis in [WAVE1-POSTMORTEM.md](WAVE1-POSTMORTEM.md).
 
-**Wave 2:** richer cuts + percentiles, historical roots, maybe company dimension when volume supports it, stronger histogram queries.
+**Wave 2 (current, due 19 Oct 2026):** the Art. 9 report, the verification page, the
+employer-facing surface, and named pilots.
 
-**Wave 3:** decentralized issuance, Kuira mobile, payer-side surface.
-
+**Wave 3:** trustless membership (`HistoricMerkleTree`), a read-only payroll connector for
+the exports companies already have, and US coverage (EO 14173 + state laws).
