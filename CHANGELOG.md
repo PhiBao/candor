@@ -3,6 +3,16 @@
 What's new in Candor, organized by Buildathon wave. Written for everyone — judges,
 contributors, and future team members.
 
+## Wave 1 · v0.3.1 — Hosting paused after judging (2026-09-30)
+
+- **Zero compute cost.** The three hosted apps (web, issuer, proof server) were scaled to
+  0 machines once Wave 1 judging closed. The public URLs return 503 until they are brought
+  back; nothing else changed.
+- **Nothing was lost.** The contract on Midnight Preprod
+  (`e7cf6ffc…dd53d`) and all contributions made during the wave are untouched — only the
+  servers that display them are off. Resume commands: `docs/DEPLOY.md` §8.
+- **Pitch deck shipped:** `docs/Candor-Pitch-Deck.pptx`.
+
 ## Wave 1 · v0.3.0 — Live on Midnight Preprod (2026-08-28)
 
 ### 🎉 Headline

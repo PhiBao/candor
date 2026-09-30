@@ -84,13 +84,23 @@ pnpm --filter @candor/contract deploy:preprod
 
 See `packages/contract/README.md` and `docs/DEPLOY.md`.
 
-## Live
+## Deployed (Wave 1, currently paused)
 
 - **App:** https://candor-midnight-web.fly.dev
 - **Issuer service:** https://candor-midnight-issuer.fly.dev/health
 - **Contract:** `e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d`
 
-Verified end-to-end on Preprod
+Verified end-to-end on Preprod (deploy → enroll → submit → aggregate), then **all three Fly
+apps were scaled to 0 machines after Wave 1 judging** to stop compute spend — the URLs above
+return 503 until the services are brought back up. Images and releases are intact; the
+contract and its data are unaffected. Resume with:
+
+```bash
+set -a; source .env; set +a          # FLY_ACCESS_TOKEN
+fly deploy -c fly.prover.toml        # own proof server (no hosted 403s)
+fly deploy -c fly.issuer.toml
+fly deploy -c fly.web.toml           # last: Caddy serves the app + same-origin proxies
+```
 
 Flow: connect Lace → issuer enrolls your membership leaf on-chain → you contribute a bucketed salary → the aggregate updates.
 
@@ -111,7 +121,8 @@ Deploy your own instance: `fly deploy -c fly.issuer.toml` then `fly deploy -c fl
 | Issuer service | **Live** — verification codes via issuer (`/issuer/*`); verified leaves auto-enrolled on-chain via baked issuer key (seamless); manual Operator panel also available. Email infra mock in Wave 1 |
 | Browser chain path (Lace + Midnight.js 4.1.1) | ✅ **End-to-end verified on Preprod** — deploy, enroll, submit all executed with real transactions. Hosted prover has explicit demo-mode fallback (never silently merges mock into live histogram) |
 | CLI deploy (`deploy.ts`) | Stub — the browser Operator console is the Wave 1 deployment path |
-| Demo video / pitch deck | **Not yet** — planned before the Sep 16 deadline |
+| Demo video / pitch deck | Pitch deck **done** (`docs/Candor-Pitch-Deck.pptx`); demo video recorded separately |
+| Hosted Fly environment | **Paused** — 3 apps scaled to 0 machines after Wave 1 judging (no compute cost); resume commands in [docs/DEPLOY.md](docs/DEPLOY.md) |
 
 - **In scope for Wave 1**: one epoch, USD only, engineering levels L3–L7, role × level × region cuts (no company), histogram buckets, epoch nullifier, k≥5 gate (UI-enforced), issuer service, web wizard, Preprod deployment.
 - **Out of scope for Wave 1**: multi-issuer / zkEmail, employer product, monetization, equity valuation, multi-currency, mobile.

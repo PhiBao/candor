@@ -81,6 +81,44 @@ pnpm --filter @candor/issuer dev   # :8787
 pnpm dev                           # :5173, proxies /issuer
 ```
 
+## 8. Hosted environment on Fly.io (pause / resume)
+
+Three Fly apps back the hosted demo: `candor-midnight-prover` (own proof server,
+`midnightntwrk/proof-server:8.1.0`), `candor-midnight-issuer` (Express), `candor-midnight-web`
+(Caddy serving the built app plus same-origin `/issuer`, `/indexer`, `/proof-server` proxies).
+
+**Pause (stop all compute spend)**
+
+```bash
+set -a; source .env; set +a          # FLY_ACCESS_TOKEN lives in .env
+fly scale count 0 -a candor-midnight-prover --yes
+fly scale count 0 -a candor-midnight-issuer --yes
+fly scale count 0 -a candor-midnight-web    --yes
+```
+
+`fly machine stop` is **not** enough: all three `fly.*.toml` files set
+`min_machines_running = 1`, so the platform restarts a stopped Machine. `scale count 0`
+removes the Machines (images, releases and the deployed contract stay intact). The three
+public URLs then return 503 — expected while paused.
+
+**Resume**
+
+```bash
+set -a; source .env; set +a
+fly deploy -c fly.prover.toml        # first: web proxies /proof-server and fails without it
+fly deploy -c fly.issuer.toml
+fly deploy -c fly.web.toml
+curl -s https://candor-midnight-issuer.fly.dev/health   # {"ok":true,...}
+```
+
+Notes:
+- `fly.web.toml` bakes `VITE_CONTRACT_ADDRESS` and `VITE_ISSUER_KEY` as build args, so a
+  web deploy always targets the current contract.
+- The prover machine must stay `auto_stop = "suspend"` (never `stop`/`destroy`): a cold start
+  returns 403 on `/proof-server/prove`.
+- The issuer keeps verification leaves in memory, so a redeploy resets them; that is fine for
+  demos (codes are issued in-band).
+
 ## Troubleshooting
 
 | Symptom | Fix |
