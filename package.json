@@ -14,6 +14,7 @@
     "lint": "pnpm -r lint",
     "contract:compile": "pnpm --filter @candor/contract compile",
     "contract:build": "pnpm --filter @candor/contract build",
+    "check:submission": "node scripts/check-submission.mjs AKINDO_SUBMISSION_DRAFT.md",
     "dev:all": "concurrently -n web,issuer \"pnpm --filter @candor/web dev\" \"pnpm --filter @candor/issuer dev\""
   },
   "packageManager": "pnpm@9.12.0",
