@@ -15,6 +15,12 @@ apps/web/src/**/*.js.map
 packages/*/src/**/*.js.map
 packages/shared/src/index.js
 packages/shared/src/mockLedger.js
+packages/shared/src/paygap.js
+packages/shared/src/paygap.d.ts
+packages/shared/src/paygap.js.map
+packages/shared/src/paygap.cli.js
+packages/shared/src/paygap.cli.d.ts
+packages/shared/src/paygap.cli.js.map
 packages/contract/src/index.js
 packages/contract/src/witnesses.js
 packages/contract/src/deploy.js

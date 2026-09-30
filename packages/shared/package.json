@@ -16,6 +16,10 @@
     "./mockLedger": {
       "types": "./dist/mockLedger.d.ts",
       "import": "./dist/mockLedger.js"
+    },
+    "./paygap": {
+      "types": "./dist/paygap.d.ts",
+      "import": "./dist/paygap.js"
     }
   },
   "scripts": {
