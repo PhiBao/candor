@@ -827,6 +827,11 @@ function OperatorPanel({
   const [issuerKeyHex, setIssuerKeyHex] = useState<string>(() => getStoredIssuerKey() ?? "");
   const [leafHex, setLeafHex] = useState<string>("");
   const [enrollEmail, setEnrollEmail] = useState<string>("");
+  // v2 address is stored separately from v1 so a v2 deploy can never silently
+  // repoint the live report at a contract with no data in it.
+  const [v2Address, setV2Address] = useState<string | null>(() => {
+    try { return localStorage.getItem("gotit:contractV2"); } catch { return null; }
+  });
   const address = getStoredContractAddress();
   const effectiveKey = getEffectiveIssuerKey() ?? issuerKeyHex.replace(/^0x/, "").trim();
   const keyValid = /^[0-9a-fA-F]{64}$/.test(effectiveKey);
@@ -859,6 +864,52 @@ function OperatorPanel({
     } catch (e: any) {
       console.error("[gotit] deploy failed — full error:", e, "cause:", e?.cause);
       onToast(e?.message ?? "deploy failed");
+    } finally { setBusy(false); }
+  };
+
+  const doDeployV2 = async () => {
+    if (!chain) return;
+    const clean = effectiveKey;
+    if (!keyValid) { onToast(`issuer key invalid (${clean.length} chars) — paste 64 hex chars and Save`); return; }
+    setBusy(true);
+    try {
+      const v2 = await import("./lib/midnight.v2");
+      const { DEFAULT_K } = await import("@gotit/shared/paygap");
+      const providers = v2.buildV2Providers({
+        indexerUri: (chain.providers.publicDataProvider as any).config?.indexerUri ?? window.location.origin + "/indexer/api/v4/graphql",
+        indexerWsUri: window.location.origin.replace(/^http/, "ws") + "/indexer/api/v4/graphql/ws",
+        proverServerUri: `${window.location.origin}/proof-server`,
+        walletProvider: (chain.providers as any).walletProvider,
+        midnightProvider: (chain.providers as any).midnightProvider,
+      });
+      const addr = await v2.deployV2(providers, hexToBytes(clean), DEFAULT_K);
+      setV2Address(addr);
+      try { localStorage.setItem("gotit:contractV2", addr); } catch {}
+      onToast(`v2 deployed at ${addr} (k=${DEFAULT_K}). Use it as the report source.`);
+    } catch (e: any) {
+      console.error("[gotit] v2 deploy failed — full error:", e, "cause:", e?.cause);
+      onToast(e?.message ?? "v2 deploy failed");
+    } finally { setBusy(false); }
+  };
+
+  const doNextEpochV2 = async () => {
+    if (!chain || !v2Address) return;
+    if (!keyValid) { onToast("issuer key invalid — paste 64 hex chars and Save"); return; }
+    setBusy(true);
+    try {
+      const v2 = await import("./lib/midnight.v2");
+      const providers = v2.buildV2Providers({
+        indexerUri: window.location.origin + "/indexer/api/v4/graphql",
+        indexerWsUri: window.location.origin.replace(/^http/, "ws") + "/indexer/api/v4/graphql/ws",
+        proverServerUri: `${window.location.origin}/proof-server`,
+        walletProvider: (chain.providers as any).walletProvider,
+        midnightProvider: (chain.providers as any).midnightProvider,
+      });
+      await v2.nextEpochV2(providers, v2Address, { issuerKey: hexToBytes(effectiveKey) });
+      onToast("Reporting period advanced — everyone may contribute once more");
+    } catch (e: any) {
+      console.error("[gotit] v2 nextEpoch failed:", e, "cause:", e?.cause);
+      onToast(e?.message ?? "nextEpoch failed");
     } finally { setBusy(false); }
   };
 
@@ -937,12 +988,40 @@ function OperatorPanel({
             <div className="sep" />
             <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                <div className="small muted">Contract</div>
+                <div className="small muted">Wave 1 contract (deployed)</div>
                 <div className="mono small">{address ?? "not deployed"}</div>
               </div>
-              <button className="btn btn-primary small" disabled={busy || !chain} onClick={doDeploy}>
-                {busy ? "Deploying…" : "Deploy contract"}
+              <button className="btn small" disabled={busy || !chain} onClick={doDeploy}>
+                {busy ? "Deploying…" : "Deploy v1"}
               </button>
+            </div>
+
+            <div className="sep" />
+            <div>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div className="small muted">Wave 2 contract — Art. 9 dimensions</div>
+                  <div className="mono small">{v2Address ?? "not deployed"}</div>
+                </div>
+                <button className="btn btn-primary small" disabled={busy || !chain} onClick={doDeployV2}>
+                  {busy ? "Deploying…" : "Deploy v2"}
+                </button>
+              </div>
+              <div className="small muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
+                v2 adds job category, gender and base/variable dimensions, and enforces the anonymity
+                threshold inside the read circuit — <code>getHistogram</code> returns 0 for any group
+                below k, so a small category cannot be published at all. Wave 1 keeps working untouched.
+              </div>
+              {v2Address && (
+                <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                  <button className="btn small" onClick={() => { onAddress(v2Address); onToast("Report will read the v2 contract"); }}>
+                    Use v2 as the report source
+                  </button>
+                  <button className="btn btn-ghost small" onClick={doNextEpochV2} disabled={busy}>
+                    Advance reporting period
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="sep" />

@@ -30,6 +30,8 @@
     "compile": "compact compile src/gotit.compact src/managed/gotit",
     "compile:zk": "compact compile src/gotit.compact src/managed/gotit",
     "build": "tsc -p tsconfig.build.json && rm -rf dist/managed && cp -R src/managed dist/managed",
+    "sync:zk": "rm -rf ../../apps/web/public/zk/gotit && mkdir -p ../../apps/web/public/zk && cp -R src/managed/gotit ../../apps/web/public/zk/gotit",
+    "sync:zk:v1": "rm -rf ../../apps/web/public/zk/candor && mkdir -p ../../apps/web/public/zk && cp -R src/managed/candor ../../apps/web/public/zk/candor",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "compile:v1": "compact compile src/candor.compact src/managed/candor"

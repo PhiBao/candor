@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port 5173",
     "build": "tsc -p tsconfig.json && vite build",
+    "sync:zk": "pnpm --filter @gotit/contract sync:zk && pnpm --filter @gotit/contract sync:zk:v1",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json --noEmit"

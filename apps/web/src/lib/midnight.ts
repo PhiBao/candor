@@ -31,6 +31,7 @@ import { Contract as GotItContract } from "@gotit/contract/managed/candor/contra
 // then, renaming them here would break loading of the live contract.
 import { witnesses, createPrivateState, type GotItPrivateState } from "@gotit/contract/witnesses";
 import { issuerCommitment } from "@gotit/shared/hash";
+import { inMemoryPrivateStateProvider } from "./privateState";
 
 export type GotItCircuitId = "submit" | "enroll" | "nextEpoch" | "getHistogram" | "readEpoch";
 
@@ -119,48 +120,6 @@ export async function connectToWallet(networkId = "preprod"): Promise<ConnectedA
 }
 
 // ---- in-memory private state (per-session; the app re-seeds the secret) ----
-
-/** Minimal in-memory PrivateStateProvider (same shape as example-bboard's). */
-function inMemoryPrivateStateProvider<PSI extends string, PS>(): PrivateStateProvider<PSI, PS> {
-  const states = new Map<string, Map<PSI, PS>>();
-  const signingKeys = new Map<string, SigningKey>();
-  let address: string | null = null;
-  const requireAddress = () => {
-    if (address === null) throw new Error("Contract address not set");
-    return address;
-  };
-  return {
-    setContractAddress(a: string) {
-      address = a;
-    },
-    async set(key: PSI, state: PS) {
-      const scoped = states.get(requireAddress()) ?? new Map();
-      scoped.set(key, state);
-      states.set(requireAddress(), scoped);
-    },
-    async get(key: PSI) {
-      return states.get(requireAddress())?.get(key) ?? null;
-    },
-    async remove(key: PSI) {
-      states.get(requireAddress())?.delete(key);
-    },
-    async clear() {
-      states.delete(requireAddress());
-    },
-    async setSigningKey(a: string, k: SigningKey) {
-      signingKeys.set(a, k);
-    },
-    async getSigningKey(a: string) {
-      return signingKeys.get(a) ?? null;
-    },
-    async removeSigningKey(a: string) {
-      signingKeys.delete(a);
-    },
-    async clearSigningKeys() {
-      signingKeys.clear();
-    },
-  } as unknown as PrivateStateProvider<PSI, PS>;
-}
 
 // ---- provider assembly ------------------------------------------------------
 
