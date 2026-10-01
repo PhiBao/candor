@@ -108,6 +108,9 @@ export default function App() {
 
 function GotItApp() {
   const [ledger, setLedger] = useState(() => loadLedger());
+  // The cut grid is the secondary Wave 1 surface; collapsed by default so the
+  // compliance pitch is what a judge sees first.
+  const [showCuts, setShowCuts] = useState(false);
   // Views are hash-routed so the report and verification pages are deep-linkable.
   // A judge, a works council member or a journalist should be able to paste a URL
   // and have the right page open — that is the point of a report you send to
@@ -323,18 +326,41 @@ function GotItApp() {
               forcing individual salaries into the open.
             </p>
             <div className="sep" />
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <button className="btn btn-primary small" onClick={() => setView("report")}>Open the report</button>
+              <button className="btn small" onClick={() => setView("verify")}>Verify a report</button>
+            </div>
+            <div className="sep" />
+            <div className="small muted" style={{ lineHeight: 1.5, marginBottom: 2 }}>
+              {live ? "Live ledger state" : "Sample dataset \u2014 not chain data"}
+            </div>
             <div className="row" style={{ justifyContent: "space-between" }}>
               <div>
-                <div className="small muted">Total verified submissions</div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{Object.values(displayLedger.histogram).reduce((a, b) => a + b, 0)}</div>
+                <div className="small muted">Verified submissions</div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>
+                  {live ? live.submissions : Object.values(displayLedger.histogram).reduce((a, b) => a + b, 0)}
+                </div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div className="small muted">Unlocked cuts</div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{cuts.filter((c) => isUnlocked(displayLedger, c)).length} / {cuts.length}</div>
+                <div className="small muted">Reporting period</div>
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{live ? live.epoch : displayLedger.epoch}</div>
               </div>
             </div>
             <div className="notice" style={{ marginTop: 12 }}>
-              <strong>Live on Midnight Preprod.</strong> Connect Lace to contribute — your proof is generated on this device and your contribution lands on-chain. Reading is always free: every unlocked cut is public. Pre-release statistics are illustrative until the contributor base grows.
+              {live ? (
+                <>
+                  <strong>Live on Midnight Preprod.</strong> A proof is generated on the employee's
+                  own device, so the salary never reaches us or the ledger. Anyone can read the
+                  aggregate without a wallet.
+                </>
+              ) : (
+                <>
+                  <strong>These figures are sample data.</strong> The figures above are a local
+                  illustrative dataset, not chain state \u2014 the contract is live on Midnight
+                  Preprod, but nobody has run a reporting period on it yet. A proof is generated on
+                  the employee's own device, so a real salary never reaches us or the ledger.
+                </>
+              )}
             </div>
             <div className="row" style={{ marginTop: 12 }}>
               <button className="btn small" onClick={() => { navigator.clipboard.writeText(getSecretHex() ?? ""); showToast("Secret key copied — stored only on this device"); }}>Copy my secret key</button>
@@ -348,14 +374,18 @@ function GotItApp() {
         <div className="row" style={{ justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 22 }}>Employee contribution tool</h2>
-            <div className="small muted" style={{ marginTop: 4 }}>
-              The Wave 1 surface: contribute to the open benchmark. Compliance reporting lives on the
-              <button className="btn btn-ghost small" style={{ marginLeft: 6, padding: "2px 8px" }} onClick={() => setView("report")}>report page</button>.
+            <div className="small muted" style={{ marginTop: 4, maxWidth: 620, lineHeight: 1.5 }}>
+              The Wave 1 surface: an open salary benchmark by role, level and region. Compliance
+              reporting is the Art. 9 report above — this is the same privacy machinery pointed at a
+              different question.
             </div>
           </div>
-          <span className="small muted">Cuts · role × level × region · k≥{K_ANONYMITY}</span>
+          <button className="btn small" onClick={() => setShowCuts((v) => !v)}>
+            {showCuts ? "Hide" : `Show ${cuts.length} cuts`}
+          </button>
         </div>
 
+        {showCuts && (
         <div className="grid">
           {cuts.map((cut) => {
             const key = cutKeyString(cut);
@@ -368,37 +398,26 @@ function GotItApp() {
                 <div className="cut-head">
                   <div>
                     <div className="cut-title" style={{ fontSize: 14 }}>{cutLabel(cut)}</div>
-                    <div className="mono small muted">{key}</div>
+                    <div className="small mono muted">{key}</div>
                   </div>
-                  <span className="badge small" style={{ background: unlocked ? "var(--green-bg)" : undefined, borderColor: unlocked ? "#14301e" : undefined, color: unlocked ? "var(--green)" : undefined }}>
-                    {unlocked ? `✓ ${total} verified` : `🔒 ${total}/${K_ANONYMITY}`}
+                  <span className="badge small" style={{ color: unlocked ? "var(--green)" : "var(--muted)" }}>
+                    {unlocked ? "✓" : "🔒"} {total}/{K_ANONYMITY}
                   </span>
                 </div>
 
-                {unlocked ? (
-                  <>
-                    <div className="hist">
-                      {hist.map((v, i) => (
-                        <div
-                          key={i}
-                          className={`hist-bar ${v === max && v > 0 ? "active" : ""}`}
-                          style={{ height: `${Math.max(6, (v / max) * 56)}px` }}
-                          title={`${BUCKETS[i].label}: ${v}`}
-                        >
-                          <div className="tip mono">{BUCKETS[i].label} · {v}</div>
-                        </div>
-                      ))}
+                <div className="hist">
+                  {hist.map((n, i) => (
+                    <div key={i} className="hist-col" title={`${n} in bucket ${i}`}>
+                      <div className="hist-bar" style={{ height: `${Math.round((n / max) * 100)}%`, opacity: n > 0 ? 1 : 0.15 }} />
                     </div>
-                    <div className="small muted">Distribution of verified totals — hover bars for counts. Each bar is a bucket, not a salary.</div>
-                  </>
+                  ))}
+                </div>
+
+                {unlocked ? (
+                  <div className="small muted">Open — click to view the distribution.</div>
                 ) : (
-                  <div className="lock">
-                    <div style={{ fontSize: 22 }}>🔒</div>
-                    <div className="small"><strong>Locked</strong> · needs {K_ANONYMITY - total} more verified contributors</div>
-                    <div className="small muted" style={{ marginTop: 4 }}>Contribute to unlock this cut for everyone.</div>
-                    <button className="btn btn-primary small" style={{ marginTop: 8 }} onClick={(e) => { e.stopPropagation(); setActiveCutKey(key); requireWallet(() => setView("contribute")); }}>
-                      Unlock by contributing
-                    </button>
+                  <div className="small muted">
+                    <b>Locked</b> · needs {K_ANONYMITY - total} more verified contributors
                   </div>
                 )}
 
@@ -411,6 +430,7 @@ function GotItApp() {
             );
           })}
         </div>
+        )}
       </div>
       </>
       )}
