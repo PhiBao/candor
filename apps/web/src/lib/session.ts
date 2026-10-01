@@ -5,6 +5,9 @@
  */
 const COMPATIBLE_MAJOR = "4";
 const ADDR_KEY = "gotit:contractAddress";
+// v2 gets its own key so deploying it never repoints the v1 report. Empty until
+// an operator deploys v2 or sets VITE_CONTRACT_ADDRESS_V2 at build time.
+const V2_ADDR_KEY = "gotit:contractV2";
 const ISSUER_KEY_KEY = "gotit:issuerKey";
 // Renamed from "candor:*" in Wave 2. Read the old keys as a fallback so a
 // returning visitor keeps their stored contract address and issuer key instead
@@ -13,6 +16,7 @@ const ISSUER_KEY_KEY = "gotit:issuerKey";
 const LEGACY_PREFIX = "candor:";
 // Baked at build time (fly deploy build arg) so visitors land on the deployed contract
 const BAKED_ADDRESS: string = (import.meta as any).env?.VITE_CONTRACT_ADDRESS ?? "";
+const BAKED_V2_ADDRESS: string = (import.meta as any).env?.VITE_CONTRACT_ADDRESS_V2 ?? "";
 const BAKED_ISSUER_KEY: string = (import.meta as any).env?.VITE_ISSUER_KEY ?? "";
 
 export function isLaceAvailable(): boolean {
@@ -57,6 +61,21 @@ export function getStoredContractAddress(): string | null {
 
 export function setStoredContractAddress(address: string): void {
   try { localStorage.setItem(ADDR_KEY, address); } catch {}
+}
+
+/**
+ * The v2 (Wave 2) contract address, or null if v2 has not been deployed here.
+ *
+ * Deliberately a separate key from v1's. Pointing the report at v2 is an
+ * explicit operator action, so a v2 deploy can never silently repoint the live
+ * report at a ledger that happens to be empty.
+ */
+export function getStoredV2ContractAddress(): string | null {
+  return readStorage(V2_ADDR_KEY) || BAKED_V2_ADDRESS || null;
+}
+
+export function setStoredV2ContractAddress(address: string): void {
+  try { localStorage.setItem(V2_ADDR_KEY, address); } catch {}
 }
 
 

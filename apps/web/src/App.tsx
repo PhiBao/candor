@@ -25,7 +25,7 @@ import {
 } from "./lib/ledger";
 import { requestCode, confirmCode, enrollLeaf } from "./lib/issuer";
 import type { GotItProviders } from "./lib/midnight";
-import { isLaceAvailable, getStoredContractAddress, setStoredContractAddress, getEffectiveIssuerKey, getBakedIssuerKey, getStoredIssuerKey } from "./lib/session";
+import { isLaceAvailable, getStoredContractAddress, setStoredContractAddress, getEffectiveIssuerKey, getBakedIssuerKey, getStoredIssuerKey, getStoredV2ContractAddress, setStoredV2ContractAddress } from "./lib/session";
 import type { LedgerSnapshot } from "./lib/ledger";
 
 // live on-chain reads (lazy — wasm loads on demand)
@@ -212,16 +212,22 @@ function GotItApp() {
             <div className="brand-mark">◐</div>
             <div>
               <div style={{ lineHeight: 1, fontSize: 16 }}>GotIt</div>
-              <div className="small mono" style={{ color: "var(--muted)", marginTop: 2 }}>verified · unlinkable · aggregate-only</div>
+              <div className="small mono" style={{ color: "var(--muted)", marginTop: 2 }}>provable · unlinkable · suppressible</div>
             </div>
           </div>
           <div className="row">
             <span className="badge">
               <span className="mono small">epoch</span> <strong>{displayLedger.epoch}</strong> · <span className="mono small">k≥{K_ANONYMITY}</span>
             </span>
-            <button className="btn btn-ghost small" onClick={() => { resetLedger(); setLedger(loadLedger()); showToast("Sample data reset"); }}>
-              Reset sample data
-            </button>
+            {view === "browse" && !live && (
+              <button
+                className="btn btn-ghost small"
+                onClick={() => { resetLedger(); setLedger(loadLedger()); showToast("Sample data reset"); }}
+                title="Clears the local illustrative dataset. Only affects this browser."
+              >
+                Reset sample data
+              </button>
+            )}
             {chain ? (
               <span className="badge" title={contractAddress ?? "no contract yet"}>
                 <span className="mono small">chain</span> <strong>Preprod ✓</strong>
@@ -461,7 +467,7 @@ function GotItApp() {
         <div className="sep" />
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <span>Powered by Midnight Network — provable pay transparency</span>
-          <span className="mono">verified · unlinkable · aggregate-only</span>
+          <span className="mono">provable · unlinkable · suppressible</span>
         </div>
         <div style={{ marginTop: 8 }} className="small">
           Built on <a className="link" href="https://midnight.network" target="_blank" rel="noreferrer">midnight.network</a> · Pre-release statistics are illustrative · One contribution per verified member per epoch, enforced by cryptography.
@@ -889,9 +895,7 @@ function OperatorPanel({
   const [enrollEmail, setEnrollEmail] = useState<string>("");
   // v2 address is stored separately from v1 so a v2 deploy can never silently
   // repoint the live report at a contract with no data in it.
-  const [v2Address, setV2Address] = useState<string | null>(() => {
-    try { return localStorage.getItem("gotit:contractV2"); } catch { return null; }
-  });
+  const [v2Address, setV2Address] = useState<string | null>(() => getStoredV2ContractAddress());
   const address = getStoredContractAddress();
   const effectiveKey = getEffectiveIssuerKey() ?? issuerKeyHex.replace(/^0x/, "").trim();
   const keyValid = /^[0-9a-fA-F]{64}$/.test(effectiveKey);
@@ -944,7 +948,7 @@ function OperatorPanel({
       });
       const addr = await v2.deployV2(providers, hexToBytes(clean), DEFAULT_K);
       setV2Address(addr);
-      try { localStorage.setItem("gotit:contractV2", addr); } catch {}
+      setStoredV2ContractAddress(addr);
       onToast(`v2 deployed at ${addr} (k=${DEFAULT_K}). Use it as the report source.`);
     } catch (e: any) {
       console.error("[gotit] v2 deploy failed — full error:", e, "cause:", e?.cause);

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { verifyReport } from "../lib/reportRead";
-import { getStoredContractAddress } from "../lib/session";
+import { getStoredContractAddress, getStoredV2ContractAddress } from "../lib/session";
+import type { JobCategory } from "../lib/groups";
 
 /**
  * Public verification — "can anyone check this?"
@@ -15,7 +16,23 @@ import { getStoredContractAddress } from "../lib/session";
 type State =
   | { kind: "idle" }
   | { kind: "checking" }
-  | { kind: "done"; ok: boolean; message: string; detail: string[] };
+  | { kind: "done"; ok: boolean; message: string; detail: string[]; source: "v2" | "v1" | null };
+
+/**
+ * Categories a v2 fingerprint was computed over.
+ *
+ * The ledger stores each category as a hash, so the chain cannot tell us what a
+ * group is called. A fingerprint therefore covers a specific category list, and
+ * verifying it needs that same list. The defaults match the report page, and the
+ * page says which list it used — a fingerprint checked against the wrong
+ * categories would report a mismatch that means nothing.
+ */
+const DEFAULT_CATEGORIES: JobCategory[] = [
+  { id: "eng", label: "engineering" },
+  { id: "sales", label: "sales" },
+  { id: "ops", label: "operations" },
+  { id: "mgmt", label: "management" },
+];
 
 export default function VerifyPage() {
   const [input, setInput] = useState("");
@@ -24,17 +41,80 @@ export default function VerifyPage() {
 
   const run = async () => {
     const fp = input.trim();
-    if (!fp || !address) return;
+    if (!fp) return;
+
+    const v2 = getStoredV2ContractAddress();
+    const v1 = getStoredContractAddress();
+
+    if (!v2 && !v1) {
+      setState({
+        kind: "done",
+        ok: false,
+        source: null,
+        message: "No contract address is configured for this deployment.",
+        detail: ["An operator has to point this deployment at a ledger before anything can be checked."],
+      });
+      return;
+    }
+
     setState({ kind: "checking" });
+
+    // Prefer v2: it is the ledger the Art. 9 report is built from. Fall back to
+    // v1 only when v2 is not configured, and say which ledger answered - a
+    // fingerprint that does not match is a very different statement depending on
+    // whether we were even looking at the right contract.
+    if (v2) {
+      try {
+        const { verifyV2Report } = await import("../lib/reportRead.v2");
+        const r = await verifyV2Report(v2, fp, DEFAULT_CATEGORIES);
+        setState({
+          kind: "done",
+          ok: r.ok,
+          source: "v2",
+          message: r.ok
+            ? "This report matches live chain state."
+            : "This report does not match current chain state.",
+          detail: [
+            `Ledger:          v2 (Art. 9 dimensions) at ${v2}`,
+            `Reporting period: ${r.period}`,
+            `Anonymity threshold: k=${r.k}`,
+            `Submissions on-chain: ${r.submissions}`,
+            `Categories checked: ${DEFAULT_CATEGORIES.map((c) => c.label).join(", ")}`,
+            `Report claims: ${r.expected}`,
+            `Chain reads:     ${r.actual}`,
+            `Checked at:      ${r.checkedAt}`,
+          ],
+        });
+        return;
+      } catch (e) {
+        // A v2 read can fail because v2 is not deployed yet, or because the
+        // address is wrong. Fall through to v1 only if v1 exists, and carry the
+        // reason so the page can explain itself.
+        if (!v1) {
+          setState({
+            kind: "done",
+            ok: false,
+            source: "v2",
+            message: `Could not read the v2 ledger: ${e instanceof Error ? e.message : "read failed"}`,
+            detail: [`Address tried: ${v2}`],
+          });
+          return;
+        }
+        setState({ kind: "checking" });
+      }
+    }
+
     try {
-      const r = await verifyReport(address, fp);
+      const r = await verifyReport(v1!, fp);
       setState({
         kind: "done",
         ok: r.ok,
+        source: "v1",
         message: r.ok
           ? "This report matches live chain state."
           : "This report does not match current chain state.",
         detail: [
+          `Ledger:          v1 (Wave 1 cuts) at ${v1}`,
           `Epoch: ${r.epoch}`,
           `Submissions on-chain: ${r.submissions}`,
           `Groups with data: ${r.populatedCuts}`,
@@ -47,6 +127,7 @@ export default function VerifyPage() {
       setState({
         kind: "done",
         ok: false,
+        source: v1 ? "v1" : null,
         message: `Could not read chain state: ${e instanceof Error ? e.message : "read failed"}`,
         detail: [],
       });
@@ -75,7 +156,7 @@ export default function VerifyPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") void run();
             }}
-            placeholder="e.g. a1b2c3d4e5f60718"
+            placeholder="paste the 16-character fingerprint from a report"
             autoComplete="off"
             spellCheck={false}
             style={{
@@ -106,9 +187,16 @@ export default function VerifyPage() {
             }}
           >
             <div style={{ fontWeight: 600, color: state.ok ? "#86efac" : "#fca5a5", marginBottom: 8 }}>
-              {state.ok ? "✓ " : "✗ "}
+              {state.ok ? "\u2713 " : "\u2717 "}
               {state.message}
             </div>
+            {state.source && !state.ok && state.source === "v1" && (
+              <div className="small" style={{ color: "#fcd34d", marginBottom: 8, lineHeight: 1.5 }}>
+                This deployment has no v2 ledger configured, so the check ran against the Wave 1
+                contract. A fingerprint from an Art. 9 report will not match it \u2014 those
+                reports are built from different dimensions.
+              </div>
+            )}
             {state.detail.length > 0 && (
               <div className="mono" style={{ fontSize: 12, lineHeight: 1.7, color: "var(--muted)" }}>
                 {state.detail.map((d) => (
@@ -118,6 +206,17 @@ export default function VerifyPage() {
             )}
           </div>
         )}
+      </div>
+
+      <div className="card card-pad" style={{ marginTop: 16 }}>
+        <h2 style={{ marginTop: 0, fontSize: 17 }}>Which report is this?</h2>
+        <div className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
+          An Art. 9 report covers a specific list of job categories, and its fingerprint covers
+          that list \u2014 the ledger stores each category as a hash, so the chain cannot tell us
+          what a group is called. The default list is <code>engineering, sales, operations,
+          management</code>. If your report used different categories, the check will report a
+          mismatch that means only the lists differ.
+        </div>
       </div>
 
       <div className="card card-pad" style={{ marginTop: 16 }}>

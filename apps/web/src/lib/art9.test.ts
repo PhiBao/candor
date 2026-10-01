@@ -4,6 +4,7 @@ import { buildReport, GENDER, COMPONENT, DEFAULT_K } from "@gotit/shared/paygap"
 import { assertNoSmallCellLeak, assertSuppressedAreEmpty, assembleArt9Report, type ChainGroupReading } from "./art9";
 import { allGroups, groupKeyHex, type JobCategory } from "./groups";
 import { sampleArt9Report } from "./art9.sample";
+import { getStoredContractAddress, getStoredV2ContractAddress } from "./session";
 
 /**
  * Tests for the disclosure-control invariants.
@@ -320,5 +321,15 @@ describe("illustrative sample report", () => {
     expect(bundle.report.suppressed.length).toBeGreaterThan(0);
     // base and variable are separate categories in the output
     expect(bundle.report.rows.some((r) => r.category.includes("Base salary"))).toBe(true);
+  });
+});
+
+describe("v2 contract address is a separate key from v1", () => {
+  // A v2 deploy must never repoint the live report. If these shared a key, one
+  // `localStorage.setItem` would silently swap the report's source ledger.
+  it("reads v2 from its own storage key, defaulting to null when unset", () => {
+    expect(getStoredV2ContractAddress()).toBeNull();
+    // v1 has a baked address in this build; v2 is not deployed yet.
+    expect(getStoredV2ContractAddress()).not.toBe(getStoredContractAddress());
   });
 });
