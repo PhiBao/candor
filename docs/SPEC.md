@@ -133,13 +133,64 @@ Two honesty rules that the code enforces rather than the docs:
   assessment on a category that may be compliant, so only a *proven* disparity of 5% counts.
 
 **Disclosure control is two-sided.** Publishing one side of a comparison reveals the other by
-subtraction, so a row is withheld unless *both* groups clear the threshold.
+subtraction, so a row is withheld unless *both* groups clear the threshold. The report
+distinguishes three reasons, because they are different facts for the reader: `no-data`
+(nobody reported), `no-comparison-group` (one side only — not fixable by recruiting), and
+`below-k-anonymity-threshold` (both sides present, one too small — fixable by recruiting).
+
+### 9.1 Where the anonymity gate lives
+
+`getHistogram` in the v2 ledger returns `0` for any group below `kThreshold`. It is enforced
+**in the read circuit**, not in the report layer or the UI:
+
+```compact
+if (!groupCount.member(gKey)) { return 0 as Uint<64>; }
+if (groupCount.lookup(gKey) < kThreshold) { return 0 as Uint<64>; }
+```
+
+This matters because a threshold enforced in the report layer is a convention — anyone can write
+a bespoke reader that skips it. Here the employer, who pays for the deployment, cannot read a
+small group either. `kThreshold` is fixed at deployment and public via `readK()`, so a report
+can state the threshold actually in force rather than the one the app believes is configured.
+
+`groupCount` is keyed per `(category, gender, component)` — never globally. A global counter
+would let a large team in one category lift a group of one in another above the line.
+
+**The honest limit of this.** `groupCount` is public ledger state, so a determined analyst can
+query the indexer directly and learn that a group has, say, 4 members. The gate protects the
+*published* figure — which is the artifact the Directive concerns and the one an employer would
+be tempted to force. It does not make group existence itself secret. The report's suppression is
+the actual protection for anything that gets filed, and `assertNoSmallCellLeak` re-checks the
+finished report and throws rather than publish a row below the threshold.
+
+### 9.2 Read split, and why it is deliberate
+
+- **Published figures** come from `getHistogram`, the gated read circuit, so a below-threshold
+  group reads as 0 and can never appear in a report.
+- **Raw ledger state** is used only to enumerate which configured groups exist and to report
+  coverage. It bypasses the gate, so it is never a source of a published count.
+
+`assertNoSmallCellLeak` and `assertSuppressedAreEmpty` are the backstop for the case where the
+read path gets this wrong — which would otherwise be silent, and a wrong number in a compliance
+filing is worse than no number.
+
+### 9.3 Category labels never go on chain
+
+The ledger stores `categoryKey = hash(label)`, max 32 bytes, so the chain can prove a group's
+size without holding its name. The label→hash mapping is published *in the report*, because
+Art. 9 requires the published breakdown to be readable. A label that exceeds 32 bytes is
+rejected with a clear message rather than failing later as a prover type error.
 
 ## 10. MVP scope and non-goals
 
 **In (Wave 2):** the report engine (`packages/shared/src/paygap.ts`, done — 38 tests), the
-report surface, the verification page, suppression tuned to the Directive's category model,
-employer-facing flow, hosted environment restored so the deliverable URL resolves.
+report surface and public verification page (both live at `#report` and `#verify`), the v2
+ledger with the Directive's dimensions and an in-circuit anonymity gate (compiled, 21 tests, not
+yet deployed), the category-label model, and the hosted environment.
+
+**Still open for Wave 2:** deploy v2 (needs a funded Preprod wallet — see [DEPLOY.md](DEPLOY.md)
+§3 and §5b), recruit contributors, and open pilot conversations with EU employers who file next
+year.
 
 **Out (Wave 2):** HRIS integration, zkEmail, multi-entity federation, mobile, direct filing
 with the authority, equity/vesting valuation, non-EU regimes (US EO 14173 and state laws are
@@ -208,8 +259,9 @@ regime it targets.
 **Wave 1 (done, 0 points):** narrow worker-facing flow, live on Preprod, 7 of 159 funded.
 Full analysis in [WAVE1-POSTMORTEM.md](WAVE1-POSTMORTEM.md).
 
-**Wave 2 (current, due 19 Oct 2026):** the Art. 9 report, the verification page, the
-employer-facing surface, and named pilots.
+**Wave 2 (current, due 19 Oct 2026):** the Art. 9 report and public verification page (both
+built and live), the v2 ledger and its in-circuit anonymity gate (built and tested, awaiting
+deployment), and named EU pilots.
 
 **Wave 3:** trustless membership (`HistoricMerkleTree`), a read-only payroll connector for
 the exports companies already have, and US coverage (EO 14173 + state laws).
