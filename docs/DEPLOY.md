@@ -73,12 +73,49 @@ pnpm --filter @gotit/contract deploy:preprod
 
 The script prints the contract address. Store it in `CONTRACT_ADDRESS` (same `.env`) — the web app and issuer read it from there.
 
+## 5b. Deploy the v2 ledger (Wave 2 — the report surface)
+
+v1 is live and frozen. **v2 is a separate deployment, not a migration** — see the rationale in
+the `Challenges` section of the pitch deck, and the frozen-domain note on
+`packages/contract/src/candor.compact`. Its `gotit:*` hash domains mean a v1 leaf deliberately
+fails to validate against v2, which is the point of the version bump.
+
+v2 adds the Directive's three missing dimensions — job category, gender, and base vs variable
+pay — plus the anonymity threshold and a per-group counter. The report page at `#report` reads
+v2, so until it is deployed that page reports nothing publishable. It does not fall back to v1's
+numbers.
+
+**The CLI path needs a seed.** `MIDNIGHT_WALLET_SEED` in `packages/contract/.env` (see §3 for
+funding it first). The deploy script's `args` differ from v1 — the constructor takes a
+`kThreshold`:
+
+```bash
+# in packages/contract/src/deploy.ts, the v2 branch passes:
+#   args: [issuerCommitment2(issuerKey), BigInt(DEFAULT_K)]
+pnpm --filter @gotit/contract deploy:preprod --contract gotit --k 5
+```
+
+**The browser path needs no seed.** This is the one that was used for Wave 1, and the one to
+prefer if you are following this doc:
+
+1. Open the app with the Lace wallet extension on **Preprod**, funded with tDUST (§3).
+2. Open **Operator** (top right).
+3. Under **Wave 2 contract — Art. 9 dimensions**, press **Deploy v2**. `k` is fixed at
+   deployment and is public thereafter via `readK()`, so the report can state the threshold
+   actually in force.
+4. The address is stored under `gotit:contractV2`, separately from v1's. Press **Use v2 as the
+   report source** to point the report at it.
+
+The v2 ZK artefacts are already served at `/zk/gotit`, so you do not need the Compact
+toolchain to deploy. Rebuild them with `pnpm --filter @gotit/web sync:zk` if you recompile.
+
 ## 6. Verify
 
 ```bash
 # read epoch (should be 1)
 # read a histogram bucket via the indexer public data provider
 pnpm --filter @gotit/contract verify:preprod
+pnpm --filter @gotit/contract verify:preprod --contract gotit   # v2
 ```
 
 ## 7. Run the issuer + web app

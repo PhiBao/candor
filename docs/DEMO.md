@@ -1,87 +1,152 @@
 # Demo Guide
 
-> **Wave 2 note:** the product was renamed Candor → GotIt. The contract file is still
-> `candor.compact` because its `candor:*` domain strings are frozen against the deployed
-> contract `e7cf6ffc…dd53d`. The Wave 1 flow below still works; the Wave 2 report surface is
-> described in [SPEC.md](SPEC.md) §9.
+> **Naming:** the product is GotIt. The v1 contract file is still `candor.compact` because its
+> `candor:*` hash domains are frozen against the deployed contract `e7cf6ffc…dd53d` — changing
+> them would reject every existing member. The v2 ledger is `gotit.compact` with `gotit:*`
+> domains. The Fly apps are `candor-*` because renaming an app destroys its URL history.
 
-## The report engine (no chain, no wallet — the Wave 2 deliverable)
+## What a judge can click right now, with no wallet and no install
+
+| URL | What it shows |
+|---|---|
+| `https://candor-midnight-web.fly.dev/` | The pitch, live network state, and the v1 contribution tool |
+| `https://candor-midnight-web.fly.dev/#report` | The Art. 9 report, reading the v2 ledger |
+| `https://candor-midnight-web.fly.dev/#report&sample` | The same page with **clearly-labelled illustrative data** |
+| `https://candor-midnight-web.fly.dev/#verify` | Public verification — paste a fingerprint, get match/mismatch |
+
+`#report` will say there is nothing publishable, because v2 is not deployed yet. That is the
+correct behaviour and worth saying out loud in the video: **the page does not fall back to
+v1's numbers to look complete.** Use `#report&sample` to show the report format, and the amber
+banner makes the distinction unmissable.
+
+## The report engine with no chain at all
 
 ```bash
 pnpm --filter @gotit/shared exec tsx src/paygap.cli.ts --demo
 ```
 
-Prints a full Art. 9 report from sample data, clearly labelled as not a filing. Highlights to
-show a judge:
+Prints a full Art. 9 report from sample data, labelled as not a filing. Useful if the network is
+down during a live demo.
 
-- **Intervals, not point estimates** — "Mean pay: $162,500–$187,500". Bucketed data only bounds
-  the truth, and the report says so.
-- **Suppression** — a 5-person category is withheld entirely, listed under "Suppressed
-  categories" with its reason.
-- **The 5% materiality call-out** — when a proven gap crosses the Art. 9(4) threshold, the
-  report states that a joint pay assessment may be triggered.
-- **Disclosure notes** travel with the output, including that participation is voluntary.
+---
 
-## One-command demo (no chain, no wallet) — the Wave 1 flow
+# Video shot list
 
-```bash
-pnpm install
-pnpm build
-pnpm --filter @gotit/web preview --port 5173
-# or
-pnpm dev
+Target **3 minutes**. The order matters: lead with the artifact a judge cares about, then prove
+it is real, then prove the privacy property. Do not spend time on setup.
+
+## Act 1 — the deliverable (0:00–1:00)
+
+**Shot 1 — `#report&sample`.** Open the URL directly.
+
+- The **interval** means: `$128,000–$156,000`, not a single number. Say why in one sentence:
+  *the figures are bucketed, so the true value is only bounded — publishing a point estimate
+  would be a rounding error dressed as a statistic.*
+- **Headcount** for each side. Art. 9 compares women and men inside one category, so both
+  columns have to be there.
+- The **amber ILLUSTRATIVE banner**. Point at it. *This is labelled because a plausible-looking
+  table in a compliance filing is the worst failure this product could have.*
+- The **coverage note** at the bottom: participation is voluntary, and an empty category is not
+  evidence that pay is equal.
+
+**Shot 2 — scroll to Withheld.** Two groups listed with different reasons:
+
+- `no-comparison-group` — data on one side only. *Reporting it would reveal the other side by
+  subtraction.*
+- `below-k-anonymity-threshold` — both sides present, one under k. *This one is fixable by
+  recruiting more people, which is why the two are labelled differently.*
+
+Then, pointing at the copy above the table: **the gate is in the contract's read circuit, not in
+this page.** An employer cannot override it, publish a small cell, or write a reader that gets
+around it.
+
+**Shot 3 — the 5% call-out.** The engineering row. *Art. 9(4): a gap of 5% or more that cannot
+be objectively justified can trigger a joint pay assessment with worker representatives. We
+flag against the bound nearest zero, not the midpoint — otherwise we cry wolf on a compliant
+category.* If the interval straddles zero, say that it is **not** flagged, and that this is
+deliberate.
+
+## Act 2 — it is provable (1:00–2:00)
+
+**Shot 4 — `#verify`.** Paste the fingerprint.
+
+- *No wallet. No account. No permission.* This is what a works council member or a journalist
+  does.
+- Show the **match** result. Then edit one character of the fingerprint and show the
+  **mismatch**. A check that can fail is what makes a pass mean something.
+- Read out the "what this does and does not prove" text. Do not skip it: *it proves the figures
+  came from the counts on chain. It does not prove anyone was paid what they said, or that
+  everyone participated.* Naming the limit is what earns trust in the rest.
+
+**Shot 5 — the contract, briefly.** `packages/contract/src/gotit.compact` in the editor, one
+circuit:
+
+```compact
+export circuit getHistogram(
+  categoryKey: Bytes<32>, gender: Uint<8>, component: Uint<8>, bucket: Uint<8>
+): Uint<64> {
+  const gKey = disclose(persistentHash<[Bytes<32>, Uint<8>, Uint<8>]>([categoryKey, gender, component]));
+  if (!groupCount.member(gKey)) { return 0 as Uint<64>; }
+  if (groupCount.lookup(gKey) < kThreshold) { return 0 as Uint<64>; }
+  // ...
+}
 ```
 
-Open http://localhost:5173
+Highlight the `kThreshold` early return. Below it, this cell reads as `0` for **everyone** —
+including the employer, who pays for the deployment. It is not a UI toggle and not a policy.
 
-**Flow to show (2 minutes):**
+Then `packages/contract/src/gotit.v2.test.ts` scrolling past. *34 tests run the generated
+contract off-chain, so if the browser's hashing ever drifts from the circuits' the build fails
+rather than silently filing a salary in the wrong cell.* Six of those tests exist only to hold
+this gate down.
 
-1. **Browse cuts** — 3 unlocked (green), 2 locked. Click any unlocked cut → see histogram, verified count.
-2. **Click Contribute** (or locked cut's "Unlock by contributing")
-   - Step 1: enter any email (e.g. you@example.com) → "Send code" → code appears on-screen (demo mode, no email infra)
-   - Step 2: paste 6-digit code → Verify
-   - Step 3: pick Level (L5), Region (remote-us), enter salary (e.g. 162000) → shows bucket `$150–175k`
-   - Step 4: Review cut + bucket → "Submit — generate ZK proof locally" → ~900ms simulated proving → success
-3. **Percentile moment** — "You're in the 61st percentile for Engineering · Senior · Remote · US" with histogram highlighting your bucket, total count incremented by 1.
-4. **Return to cut** — now histogram has one more in that bucket. Try submitting again with same identity → "already submitted this epoch" (nullifier).
+## Act 3 — the privacy property (2:00–2:45)
 
-**Reset:** header "Reset demo" clears ledger.
+**Shot 6 — the contribute flow** (needs Lace on Preprod, funded with tDUST — see
+[DEPLOY.md](DEPLOY.md) §3). This is the one shot that can fail, so record it last and have a
+cutaway ready.
 
-## With issuer backend
+- The salary field. *Typed on your own device. It is a private witness — it never leaves here.*
+- The bucket shown back: `$125k–$150k`. *Your exact figure is not recoverable from what you
+  submit.*
+- The proof generating. *Locally. We ship our own proof server precisely because the witness
+  must not go to a third party.*
+- The histogram on the report page increments by one.
 
-```bash
-pnpm --filter @gotit/issuer dev
-# issuer at http://localhost:8787
-# web dev server proxies /issuer → :8787, so same flow but issuer log is real
-curl http://localhost:8787/health
-curl http://localhost:8787/log  # append-only, domains redacted
-```
+**Shot 7 — submit again with the same identity.** Rejected.
 
-## Midnight Preprod deployment
+- *The nullifier is `hash(secret, period)`. It proves you already contributed this period
+  without revealing who you are. The issuer sees a leaf, never the secret that derives this.*
 
-```bash
-# 1. proof server (user-local, witness is salary)
-docker compose -f packages/contract/proof-server.yml up
+## Act 4 — close (2:45–3:00)
 
-# 2. ensure Lace wallet on Preprod, funded with tDUST (faucet + registration wait)
-# 3. deploy
-pnpm --filter @gotit/contract compile
-pnpm --filter @gotit/contract build
-# configure .env from .env.example, then run deploy script
-node --loader ts-node/esm packages/contract/src/deploy.ts preprod
-```
+**Shot 8 — the home page**, scrolling to the three pills: **provable / unlinkable /
+suppressible**.
 
-Contract is `packages/contract/src/candor.compact`, compiled with compact 0.31.1. Ledger state is observable via `packages/contract/src/deploy.ts`'s `publicDataProvider.queryContractState`.
+Then state the buyer and the date: *From 7 June 2027, every EU employer with 150+ staff has to
+publish this. Our customer is the Head of Total Rewards, and their project starts now, because
+they report on last year.*
 
-## Video checklist
+**One honest line to include.** The issuer still learns who is a member — it just cannot link a
+person to their figure, because it never receives the secret. Replacing it with a Merkle
+membership proof is Wave 3, and it is on the comparison slide in the deck. Naming the residual
+trust assumption is more persuasive than hiding it.
 
-Lead with the report engine — it is the Wave 2 deliverable and needs no wallet:
+---
 
-1. The Art. 9 report from sample data, and the interval-vs-point-estimate honesty
-2. A suppressed category and its stated reason
-3. The 5% materiality call-out
-4. Then the chain path: public pages readable with no wallet → contribute → proof generated
-   locally → histogram increments
-5. Second submit rejected (nullifier) — "one per period per verified person"
-6. Trust boundary: the issuer sees membership, never a submission linked to a person
-7. Histogram-not-sum guarantee (differential-leak regression exists in the tests)
+## Failure modes to have a cutaway for
+
+| If this breaks | Do this |
+|---|---|
+| Lace not installed / not funded | Skip to Act 2 — the report and verification need no wallet. Say so: *this is the part a works council actually uses.* |
+| Proof server slow | `pnpm --filter @gotit/shared exec tsx src/paygap.cli.ts --demo` in a second terminal |
+| Indexer unreachable | The report page will show an explicit error. Do not pretend otherwise — show the error and say it refuses to substitute data. |
+
+## Do not
+
+- Do not narrate jargon: *nullifier, witness, ledger, Compact, epoch* are developer words. Say
+  "the number that proves you contributed without saying who you are" instead.
+- Do not show the sample data without the banner in frame.
+- Do not claim k-anonymity protects against someone reading the indexer directly. It is enforced
+  in the read path; the report's suppression is what protects the published artifact. That
+  distinction is stated in `docs/SPEC.md` and it is the honest position.

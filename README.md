@@ -133,7 +133,7 @@ Two properties in that diagram are load-bearing:
 | `packages/contract` | Compact source → generated TS → proving keys; two ledgers (v1 deployed, v2 Wave 2) | 34 |
 | `packages/shared` | Hash parity with the circuits, bucket scales, the Art. 9 report engine | 38 |
 | `packages/issuer` | Work-email verification → leaf insertion (the only trusted component) | — |
-| `apps/web` | Report page, verification page, contribute wizard, Operator console | 14 |
+| `apps/web` | Report page, verification page, contribute wizard, Operator console | 31 |
 
 **Ledger (v2 — the Wave 2 contract)**
 
@@ -183,15 +183,22 @@ Wave 1 uses a **trusted issuer** that learns *who is a member* but cannot link a
 to a member — it never sees the secret that derives the nullifier. Removing it entirely
 (Merkle membership) is Wave 3.
 
-## Deployed (Wave 1, currently paused)
+## Deployed
 
 - **App:** https://candor-midnight-web.fly.dev
 - **Issuer:** https://candor-midnight-issuer.fly.dev/health
-- **Contract:** `e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d`
+- **Report:** https://candor-midnight-web.fly.dev/#report
+- **Verify a report:** https://candor-midnight-web.fly.dev/#verify
+- **Report format, with illustrative data:** https://candor-midnight-web.fly.dev/#report&sample
+
+> The report page reads the **v2** ledger, which is not deployed yet, so `#report` currently
+> states that there is nothing publishable rather than showing numbers. `#report&sample` shows
+> the same page with clearly-labelled illustrative data. See [docs/DEPLOY.md](docs/DEPLOY.md) §5.
+- **Contract (Wave 1):** `e7cf6ffc48ebeb450813104e6a5ab3d585f7e275bcd32e5ea82eb7a8c21dd53d`
 
 Verified end-to-end on Preprod (deploy → enroll → submit → aggregate), with real
 transactions in the contract's histogram. The three Fly apps are **running** — one machine
-each. Resume after a stop with:
+each. Redeploy or resume with:
 
 ```bash
 set -a; source .env; set +a          # FLY_ACCESS_TOKEN
@@ -216,21 +223,23 @@ Deploy your own instance: `fly deploy -c fly.issuer.toml` then `fly deploy -c fl
 
 | Piece | State |
 |---|---|
-| Compact contract (0.31.1 / lang 0.23) | **Live on Preprod** — 5 circuits `submit`, `enroll`, `nextEpoch`, `getHistogram`, `readEpoch` |
-| Off-chain circuit tests | **13 passing** against the generated contract (happy path, double-submit, non-member, bad bucket, histogram-not-sum leak) |
+| Compact contract v1 (0.31.1 / lang 0.23) | **Live on Preprod** — 5 circuits `submit`, `enroll`, `nextEpoch`, `getHistogram`, `readEpoch`. Frozen: its `candor:*` hash domains are inputs to a live deployment, so they cannot change. |
+| Off-chain circuit tests | **34 passing** against the generated contract, across both ledgers. 13 cover v1 (happy path, double-submit, non-member, bad bucket, histogram-not-sum leak); 21 cover v2, six of which exist only to hold the anonymity gate down |
 | Report engine (`paygap.ts`) | **38 tests passing** — Art. 9 statistics, interval arithmetic, two-sided suppression |
-| Report + verification pages | **Live** — reads real chain state, publishes a fingerprint, and a third party can verify it with no wallet |
+| Report + verification pages | **Live** — reads real chain state, publishes a fingerprint, a third party can verify with no wallet. Deep-linkable at `#report` and `#verify`. |
+| v2 ledger (Art. 9 dimensions) | **Compiled + 34 circuit tests** — category × gender × base/variable, with the anonymity gate enforced in the read circuit. **Not yet deployed**; the Operator console can deploy it. |
 | Issuer service | **Works** — codes in-band, `POST /enroll` idempotent; email infra mock in Wave 1 |
 | Browser chain path (Lace + Midnight.js 4.1.1) | **End-to-end verified on Preprod** with real transactions |
-| Compliance report UI | **Wave 2** — engine done, not yet wired into the app |
+| Compliance report UI | **Live** — Art. 9 tables, interval means, two-sided suppression, coverage disclosure, and an in-circuit k-gate. Reads the v2 ledger; says so plainly when there is nothing publishable rather than substituting data |
 | HRIS / payroll export connector | **Wave 3** |
 | Live on-chain reads | **Working** — official Preprod indexer (API v4) via a same-origin proxy; reads epoch and real histogram entries with no wallet |
 | Hosted Fly environment | **Running** (1 machine per app) — pause/resume in [docs/DEPLOY.md](docs/DEPLOY.md) |
-| Demo video | **Not yet recorded** |
+| Demo video | **Not yet recorded** — shot list in [docs/DEMO.md](docs/DEMO.md) |
 
-**In scope for Wave 2:** the Art. 9 report surface, a public verification page, a category
-model matching the Directive's "same work or work of equal value", and an employer-facing
-flow.
+**In scope for Wave 2:** the Art. 9 report surface, a public verification page, the
+Directive's category model, and the v2 ledger that makes a gender gap computable on-chain
+without exposing anyone. **Remaining:** deploy v2 (needs a funded Preprod wallet), recruit
+contributors, and open pilots.
 **Out of scope for Wave 2:** HRIS integration, zkEmail, multi-entity federation, mobile.
 
 ## Wave 1 post-mortem (why this is Wave 2)
