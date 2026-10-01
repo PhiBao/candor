@@ -6,7 +6,7 @@ import {
 } from "../lib/art9";
 import { allGroups, bucketLabels, type JobCategory } from "../lib/groups";
 import { getStoredContractAddress } from "../lib/session";
-import { GENDER, COMPONENT, GENDER_LABEL, COMPONENT_LABEL } from "@gotit/shared/paygap";
+import { GENDER, COMPONENT, GENDER_LABEL, COMPONENT_LABEL, DEFAULT_K } from "@gotit/shared/paygap";
 
 /**
  * The Wave 2 report surface — Art. 9 statistics read from the v2 ledger.
@@ -36,7 +36,7 @@ const PERIOD = "FY2026 — Art. 9 preview";
 type LoadState =
   | { kind: "loading" }
   | { kind: "error"; message: string; hint?: string }
-  | { kind: "ready"; bundle: Art9ReportBundle; fingerprint: string };
+  | { kind: "ready"; bundle: Art9ReportBundle; fingerprint: string; illustrative: boolean };
 
 export default function ReportPage() {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -44,11 +44,32 @@ export default function ReportPage() {
   const [categories, setCategories] = useState<JobCategory[]>(DEFAULT_CATEGORIES);
   const [categoriesText, setCategoriesText] = useState(DEFAULT_CATEGORIES.map((c) => c.label).join("\n"));
   const [showSetup, setShowSetup] = useState(false);
+  const [illustrative, setIllustrative] = useState<boolean>(() => {
+    try {
+      return location.hash
+        .replace(/^#/, "")
+        .split(/[&?]/)
+        .slice(1)
+        .includes("sample");
+    } catch {
+      return false;
+    }
+  });
 
   const address = getStoredContractAddress();
 
   const load = useCallback(async () => {
     setState({ kind: "loading" });
+    // Opt-in sample data, never automatic. #sample shows the report FORMAT on a
+    // chain with no data yet. A failed LIVE read still errors - that is the
+    // behaviour that matters, and the one that must not be softened.
+    if (illustrative) {
+      const { sampleArt9Report } = await import("../lib/art9.sample");
+      const bundle = sampleArt9Report(categories, DEFAULT_K);
+      assertNoSmallCellLeak(bundle.report, bundle.k);
+      setState({ kind: "ready", bundle, fingerprint: "illustrative — not a chain read", illustrative: true });
+      return;
+    }
     if (!address) {
       setState({
         kind: "error",
@@ -61,7 +82,7 @@ export default function ReportPage() {
       const read = await import("../lib/reportRead.v2");
       const { fingerprint, bundle } = await read.buildV2Report(address, categories, PERIOD);
       assertNoSmallCellLeak(bundle.report, bundle.k);
-      setState({ kind: "ready", bundle, fingerprint });
+      setState({ kind: "ready", bundle, fingerprint, illustrative: false });
     } catch (e) {
       const message = e instanceof Error ? e.message : "read failed";
       setState({
@@ -72,7 +93,7 @@ export default function ReportPage() {
           : undefined,
       });
     }
-  }, [address, categories]);
+  }, [address, categories, illustrative]);
 
   useEffect(() => {
     void load();
@@ -146,13 +167,26 @@ export default function ReportPage() {
               <Stat label="Publishable groups" value={`${state.bundle.publishableGroups} / ${state.bundle.configuredGroups}`} />
             </div>
             <div style={{ marginTop: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span className="badge small" style={{ color: "var(--green)", borderColor: "#14301e", background: "var(--green-bg)" }}>
-                ● live on-chain
-              </span>
+              {state.illustrative ? (
+                <span className="badge small" style={{ color: "#facc15", borderColor: "#713f12", background: "#1a1500" }}>
+                  ILLUSTRATIVE SAMPLE — not chain data
+                </span>
+              ) : (
+                <span className="badge small" style={{ color: "var(--green)", borderColor: "#14301e", background: "var(--green-bg)" }}>
+                  ● live on-chain
+                </span>
+              )}
               <span className="muted" style={{ fontSize: 13 }}>
                 fingerprint <code style={{ color: "var(--fg)" }}>{state.fingerprint}</code>
               </span>
               <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                <button
+                  className="btn btn-ghost small"
+                  onClick={() => setIllustrative((v) => !v)}
+                  title="Toggle illustrative sample data. A failed live read never falls back to it."
+                >
+                  {illustrative ? "Show live" : "Show sample"}
+                </button>
                 <button className="btn btn-ghost small" onClick={() => setShowSetup((s) => !s)}>
                   {showSetup ? "Hide" : "Categories"}
                 </button>
@@ -162,6 +196,15 @@ export default function ReportPage() {
               </div>
             </div>
           </div>
+
+          {state.illustrative && (
+            <div className="notice" style={{ marginTop: 16, borderColor: "#713f12", background: "#1a1500" }}>
+              <b>This is illustrative sample data, not a live read.</b> It demonstrates the report
+              format on a chain that has no data yet. The figures are generated in your browser, are
+              not on the ledger, and must never be filed. Switch back to <b>Show live</b> for the real
+              read, which will say so plainly if the chain has nothing.
+            </div>
+          )}
 
           {showSetup && (
             <div className="card card-pad" style={{ marginTop: 16 }}>

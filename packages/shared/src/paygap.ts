@@ -362,8 +362,17 @@ export function medianGap(reference: Histogram, other: Histogram): Interval | nu
 // ---- Disclosure control ----
 
 export type SuppressionReason =
+  /** Both sides present, but the smaller one is under the threshold. */
   | "below-k-anonymity-threshold"
-  | "empty-group"
+  /** Neither side has any participants at all. */
+  | "no-data"
+  /**
+   * Only one side reported. Art. 9 compares women and men within a category, so
+   * this cannot be reported — and reporting the side that did report would
+   * reveal the other by subtraction. Distinct from "no data" because it means
+   * "we have half a comparison", which is a very different fact for a reader.
+   */
+  | "no-comparison-group"
   | "merged-into-parent-category";
 
 export type SuppressedRow = {
@@ -437,7 +446,7 @@ export function buildReport(
     total += refTotal + cmpTotal;
 
     if (refTotal + cmpTotal === 0) {
-      suppressed.push({ category: c.category, reason: "empty-group", size: 0 });
+      suppressed.push({ category: c.category, reason: "no-data", size: 0 });
       continue;
     }
 
@@ -445,8 +454,11 @@ export function buildReport(
     // one side of a comparison reveals the other by subtraction, so a one-sided
     // row is a disclosure just as much as a small cell.
     if (refTotal < k || cmpTotal < k) {
+      // Distinguish "we have half a comparison" from "the small side is under k".
+      // A compliance reader needs to know which, because only the second is
+      // fixable by recruiting more people.
       const reason: SuppressionReason =
-        refTotal === 0 || cmpTotal === 0 ? "empty-group" : "below-k-anonymity-threshold";
+        refTotal === 0 || cmpTotal === 0 ? "no-comparison-group" : "below-k-anonymity-threshold";
       suppressed.push({ category: c.category, reason, size: refTotal + cmpTotal });
       if (refTotal < k && cmpTotal < k) partial += 1;
       continue;

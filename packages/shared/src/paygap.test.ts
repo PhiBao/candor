@@ -250,7 +250,7 @@ describe("report building", () => {
 
   it("marks an entirely empty category distinctly from a small one", () => {
     const r = buildReport([cat("Newly formed", [], [])], { period: "FY2026", generatedAt: "2026-09-30" });
-    expect(r.suppressed[0].reason).toBe("empty-group");
+    expect(r.suppressed[0].reason).toBe("no-data");
   });
 
   it("counts participation including suppressed categories", () => {

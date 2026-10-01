@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   BUCKETS,
   K_ANONYMITY,
@@ -43,6 +43,33 @@ const VerifyPage = lazy(() => import("./views/VerifyPage"));
 
 type View = "browse" | "cut" | "contribute" | "result" | "report" | "verify";
 
+/** Only the public, shareable views are deep-linkable — the rest need wallet state. */
+const HASHABLE: View[] = ["report", "verify", "browse"];
+
+/**
+ * Parse `#report` and `#report&sample` / `#report?sample`.
+ *
+ * The first segment is the view; the rest are flags. Treating the whole hash as
+ * the view name means any flag silently drops the user back to the landing page
+ * — a bug that only shows up when you actually click the URL, which is exactly
+ * how this one was found.
+ */
+function parseHash(): { view: View; flags: string[] } {
+  try {
+    const raw = location.hash.replace(/^#/, "");
+    const parts = raw.split(/[&?]/).filter(Boolean);
+    const head = parts[0] ?? "";
+    const view = (HASHABLE as string[]).includes(head) ? (head as View) : "browse";
+    return { view, flags: parts.slice(1) };
+  } catch {
+    return { view: "browse", flags: [] };
+  }
+}
+
+function viewFromHash(): View {
+  return parseHash().view;
+}
+
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
@@ -81,7 +108,22 @@ export default function App() {
 
 function GotItApp() {
   const [ledger, setLedger] = useState(() => loadLedger());
-  const [view, setView] = useState<View>("browse");
+  // Views are hash-routed so the report and verification pages are deep-linkable.
+  // A judge, a works council member or a journalist should be able to paste a URL
+  // and have the right page open — that is the point of a report you send to
+  // someone. Wallet-dependent views stay internal, since they need state.
+  const [view, setViewRaw] = useState<View>(() => viewFromHash());
+  const setView = useCallback((v: View) => {
+    setViewRaw(v);
+    try {
+      history.replaceState(null, "", HASHABLE.includes(v) && v !== "browse" ? `#${v}` : location.pathname);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    const onHash = () => setViewRaw(viewFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   const [activeCutKey, setActiveCutKey] = useState<string>(() => allCuts()[0] ? cutKeyString(allCuts()[0]) : "");
   const [toast, setToast] = useState<string | null>(null);
   const [chain, setChain] = useState<{ providers: GotItProviders } | null>(null);
@@ -215,7 +257,7 @@ function GotItApp() {
         </div>
       )}
 
-      {!laceReady && !chain && (
+      {view === "browse" && !laceReady && !chain && (
         <div className="container">
           <div className="notice" style={{ marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span>
@@ -227,42 +269,52 @@ function GotItApp() {
         </div>
       )}
 
+      {view === "browse" && (
+      <>
       <div className="container hero">
         <div className="hero-grid">
           <div className="card card-pad">
-            <div className="kicker">For crypto-native tech workers</div>
+            <div className="kicker">For EU employers · Directive (EU) 2023/970</div>
             <h1 className="hero-title">
-              Know what people like you <span style={{ color: "var(--accent)" }}>actually earn</span>.
+              Publish a pay gap report. <span style={{ color: "var(--accent)" }}>Never expose one employee.</span>
             </h1>
             <p className="hero-copy">
-              GotIt shows verified compensation distributions — never individual records. Only verified members can contribute, and no one (including us) can link a number back to you.
+              From 7 June 2027, every EU company with 150+ employees must publish gender pay gap
+              statistics — and the burden of proof is theirs. GotIt produces a report anyone can
+              verify against the chain, without exposing a single individual.
             </p>
             <div className="trust">
-              <span className="pill"><b>Verified</b> · work-email check via issuer</span>
-              <span className="pill"><b>Unlinkable</b> · secret never leaves your device</span>
-              <span className="pill"><b>Aggregate-only</b> · histogram buckets, not raw values</span>
+              <span className="pill"><b>Provable</b> · verifiable against chain state</span>
+              <span className="pill"><b>Unlinkable</b> · the salary is a private witness</span>
+              <span className="pill"><b>Suppressible</b> · k-anonymity enforced in-circuit</span>
             </div>
             <div className="row" style={{ marginTop: 14 }}>
-              <button className="btn btn-primary" onClick={() => requireWallet(() => setView("contribute"))}>Contribute anonymously</button>
-              <button className="btn" onClick={() => document.getElementById("cuts")?.scrollIntoView({ behavior: "smooth" })}>Browse cuts</button>
+              <button className="btn btn-primary" onClick={() => setView("report")}>See the report</button>
+              <button className="btn" onClick={() => setView("verify")}>Verify a report</button>
             </div>
             <div className="notice" style={{ marginTop: 14 }}>
-              <strong>How privacy works.</strong> Your device generates a secret. The issuer sees only a hash (the leaf) to confirm you’re a member — it never sees the secret, so it cannot derive your one-per-epoch nullifier. Your exact salary is bucketed locally; only the bucket index and cut key are disclosed on-chain. Membership reveal is per-leaf today; fully private ZK membership is on the roadmap. Proofs are generated locally by design — hosted proving is rejected.
+              <strong>How it works.</strong> Each employee commits their job category, gender and
+              base/variable pay from their own device. Only counts ever reach the ledger, and the read
+              circuit returns nothing for any group below the anonymity threshold — so a small category
+              cannot be published even by an employer override. Participation is voluntary: nobody,
+              including the employer, can compel a disclosure.
             </div>
           </div>
 
           <div className="card card-pad">
             <div className="kicker" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                Network stats
-                {live ? (
-                  <span className="badge small" style={{ color: "var(--green)", borderColor: "#14301e", background: "var(--green-bg)" }}>● live on-chain</span>
-                ) : (
-                  <span className="badge small">sample data</span>
-                )}
-              </div>
-            <h3 style={{ margin: "6px 0 8px" }}>Why reading is free</h3>
+              Network state
+              {live ? (
+                <span className="badge small" style={{ color: "var(--green)", borderColor: "#14301e", background: "var(--green-bg)" }}>● live on-chain</span>
+              ) : (
+                <span className="badge small">sample data</span>
+              )}
+            </div>
+            <h3 style={{ margin: "6px 0 8px" }}>Read the report without a wallet</h3>
             <p className="small muted" style={{ lineHeight: 1.5 }}>
-              Anyone can read any cut that has ≥{K_ANONYMITY} verified contributors. Locked cuts prompt you to contribute to unlock them — that’s the give-to-get loop. No wallet needed to read.
+              The report and the verification page need no wallet, no account and no permission. A
+              works council member or a regulator can confirm a filing is real without a court order
+              forcing individual salaries into the open.
             </p>
             <div className="sep" />
             <div className="row" style={{ justifyContent: "space-between" }}>
@@ -287,9 +339,15 @@ function GotItApp() {
       </div>
 
       <div className="container" id="cuts" style={{ padding: "10px 0 18px" }}>
-        <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
-          <h2 style={{ margin: 0, fontSize: 22 }}>Cuts · role × level × region</h2>
-          <span className="small muted">Wave 1: engineering only · no company dimension (privacy)</span>
+        <div className="row" style={{ justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22 }}>Employee contribution tool</h2>
+            <div className="small muted" style={{ marginTop: 4 }}>
+              The Wave 1 surface: contribute to the open benchmark. Compliance reporting lives on the
+              <button className="btn btn-ghost small" style={{ marginLeft: 6, padding: "2px 8px" }} onClick={() => setView("report")}>report page</button>.
+            </div>
+          </div>
+          <span className="small muted">Cuts · role × level × region · k≥{K_ANONYMITY}</span>
         </div>
 
         <div className="grid">
@@ -348,6 +406,8 @@ function GotItApp() {
           })}
         </div>
       </div>
+      </>
+      )}
 
       {view === "cut" && activeCut && (
         <CutDetail
@@ -400,7 +460,7 @@ function GotItApp() {
       <footer className="container footer">
         <div className="sep" />
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-          <span>Powered by Midnight Network — zero-knowledge compensation truth</span>
+          <span>Powered by Midnight Network — provable pay transparency</span>
           <span className="mono">verified · unlinkable · aggregate-only</span>
         </div>
         <div style={{ marginTop: 8 }} className="small">

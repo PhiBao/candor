@@ -88,8 +88,8 @@ export function assertNoSmallCellLeak(report: PayGapReport, k: number): void {
 export function assertSuppressedAreEmpty(report: PayGapReport, histograms: Map<string, number[]>): void {
   for (const s of report.suppressed) {
     const h = histograms.get(s.category);
-    if (h && h.some((n) => n > 0) && s.reason === "empty-group") {
-      throw new Error(`disclosure control violated: "${s.category}" marked empty but has counts`);
+    if (h && h.some((n) => n > 0) && s.reason === "no-data") {
+      throw new Error(`disclosure control violated: "${s.category}" marked no-data but has counts`);
     }
   }
 }

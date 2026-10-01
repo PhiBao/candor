@@ -3,6 +3,7 @@ import { BUCKET_COUNT, bucketForSalary } from "@gotit/shared";
 import { buildReport, GENDER, COMPONENT, DEFAULT_K } from "@gotit/shared/paygap";
 import { assertNoSmallCellLeak, assertSuppressedAreEmpty, assembleArt9Report, type ChainGroupReading } from "./art9";
 import { allGroups, groupKeyHex, type JobCategory } from "./groups";
+import { sampleArt9Report } from "./art9.sample";
 
 /**
  * Tests for the disclosure-control invariants.
@@ -132,9 +133,9 @@ describe("assertSuppressedAreEmpty", () => {
     // Sanity: the report has no suppressed rows, so nothing to check.
     expect(() => assertSuppressedAreEmpty(report, histograms)).not.toThrow();
 
-    const withSuppressed = { ...report, suppressed: [{ category: "X", reason: "empty-group" as const, size: 0 }] };
+    const withSuppressed = { ...report, suppressed: [{ category: "X", reason: "no-data" as const, size: 0 }] };
     expect(() => assertSuppressedAreEmpty(withSuppressed, new Map([["X", hist(3, 3)]]))).toThrow(
-      /marked empty but has counts/,
+      /marked no-data but has counts/,
     );
   });
 
@@ -290,5 +291,34 @@ describe("group model", () => {
     const m = groupOf("engineering", GENDER.MALE, COMPONENT.BASE);
     expect(w.categoryKeyHex).toBe(m.categoryKeyHex);
     expect(groupKeyHex(w)).not.toBe(groupKeyHex(m));
+  });
+});
+describe("illustrative sample report", () => {
+  it("is labelled unmistakably as not a filing", () => {
+    const bundle = sampleArt9Report(CATEGORIES);
+    const notes = bundle.report.notes.join(" ");
+    expect(notes).toMatch(/ILLUSTRATIVE/i);
+    expect(notes).toMatch(/NOT read from the ledger/i);
+    expect(notes).toMatch(/never be filed/i);
+    expect(bundle.report.period).toMatch(/SAMPLE/i);
+  });
+
+  it("still passes the disclosure-control assertion", () => {
+    // Sample data must obey the same gate as live data. A demo that leaks a
+    // small cell would be worse than no demo.
+    const bundle = sampleArt9Report(CATEGORIES);
+    expect(() => assertNoSmallCellLeak(bundle.report, bundle.k)).not.toThrow();
+  });
+
+  it("demonstrates the three things worth showing: a material gap, a suppression, and a split component", () => {
+    const bundle = sampleArt9Report(CATEGORIES);
+
+    // at least one publishable row, flagged at the 5% threshold
+    expect(bundle.report.rows.length).toBeGreaterThan(0);
+    expect(bundle.report.rows.some((r) => r.gap?.material)).toBe(true);
+    // something withheld
+    expect(bundle.report.suppressed.length).toBeGreaterThan(0);
+    // base and variable are separate categories in the output
+    expect(bundle.report.rows.some((r) => r.category.includes("Base salary"))).toBe(true);
   });
 });
